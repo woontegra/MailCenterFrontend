@@ -20,13 +20,14 @@ export default function Inbox() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
-  const { data: mails, isLoading } = useQuery<{ data: Mail[] }>({
+  const { data: mails, isLoading } = useQuery<Mail[]>({
     queryKey: ['mails', filter, searchFilters],
-    queryFn: () => {
+    queryFn: async () => {
       const params: any = { is_deleted: false, ...searchFilters }
       if (filter === 'unread') params.is_read = false
       if (filter === 'starred') params.is_starred = true
-      return mailApi.getMails(params)
+      const res = await mailApi.getMails(params)
+      return Array.isArray(res.data?.data) ? res.data.data : []
     },
   })
 
@@ -95,7 +96,7 @@ export default function Inbox() {
     touchStartY.current = 0
   }
 
-  const mailList = mails?.data || []
+  const mailList = mails || []
 
   if (isLoading) {
     return (

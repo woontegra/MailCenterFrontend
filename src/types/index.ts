@@ -25,6 +25,11 @@ export interface Account {
   name: string
   email: string
   is_active: boolean
+  brand_id?: number | null
+  brand_name?: string | null
+  imap_connection_status?: string | null
+  smtp_connection_status?: string | null
+  last_connection_test_at?: string | null
 }
 
 export interface DashboardStats {

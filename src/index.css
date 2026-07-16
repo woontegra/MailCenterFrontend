@@ -2,13 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --mc-canvas: #f3f5f7;
+  --mc-ink: #15202b;
+  --mc-dock: #1a2332;
+  --mc-signal: #0f9aa8;
+  --mc-line: #d8dee6;
+  --mc-panel-shadow: 0 12px 40px -24px rgba(21, 32, 43, 0.35);
+}
+
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  @apply bg-gray-50 text-gray-900;
-  /* Native app feel */
+  background-color: var(--mc-canvas);
+  color: var(--mc-ink);
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
@@ -18,10 +27,227 @@ body {
   box-sizing: border-box;
 }
 
-/* Smooth scrolling for mobile */
 html {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+}
+
+@layer components {
+  .mc-dot-grid {
+    background-color: var(--mc-canvas);
+    background-image: radial-gradient(rgba(26, 35, 50, 0.07) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .mc-tech-lines {
+    background-image:
+      linear-gradient(rgba(26, 35, 50, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26, 35, 50, 0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .mc-panel {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(216, 222, 230, 0.8);
+    box-shadow: var(--mc-panel-shadow);
+    backdrop-filter: blur(4px);
+    border-radius: 1.25rem 0.35rem 1.25rem 0.35rem;
+  }
+
+  .mc-panel-asymmetric {
+    border-radius: 1.5rem 0.4rem 1.35rem 0.55rem;
+  }
+
+  .mc-dock {
+    background-color: #1a2332;
+    color: #ffffff;
+    box-shadow: 8px 0 32px -16px rgba(15, 23, 42, 0.45);
+  }
+
+  .mc-dock-edge {
+    border-color: #2c3a4f;
+  }
+
+  .mc-dock-muted {
+    color: #8b97a8;
+  }
+
+  .mc-dock-raised {
+    background-color: #243044;
+  }
+
+  .mc-dock-link {
+    color: #8b97a8;
+  }
+
+  .mc-dock-link:hover {
+    color: #ffffff;
+    background-color: rgba(36, 48, 68, 0.7);
+  }
+
+  .mc-dock-link-active {
+    background-color: #243044;
+    color: #ffffff;
+  }
+
+  .mc-dock-signal {
+    background-color: #0f9aa8;
+  }
+
+  .mc-dock-signal:hover {
+    background-color: #1bb8c7;
+  }
+
+  .mc-dock-indicator {
+    background-color: #0f9aa8;
+  }
+
+  .mc-dock-indicator-glow {
+    color: #1bb8c7;
+  }
+
+  .mc-reveal {
+    animation: fade-up 0.45s ease-out both;
+  }
+
+  .mc-reveal-delay-1 { animation-delay: 60ms; }
+  .mc-reveal-delay-2 { animation-delay: 120ms; }
+  .mc-reveal-delay-3 { animation-delay: 180ms; }
+  .mc-reveal-delay-4 { animation-delay: 240ms; }
+
+  .mc-shell {
+    width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .mc-shell {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .mc-shell {
+      padding-left: 2.5rem;
+      padding-right: 2.5rem;
+    }
+  }
+
+  .mc-dashboard {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 5.5rem);
+    padding-bottom: 1.25rem;
+  }
+
+  @media (min-width: 1024px) {
+    .mc-dashboard {
+      min-height: calc(100vh - 5rem);
+      padding-bottom: 1.5rem;
+    }
+  }
+
+  .mc-dashboard-panels {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    min-height: 22rem;
+  }
+
+  @media (min-width: 1280px) {
+    .mc-dashboard-panels {
+      grid-template-columns: minmax(0, 0.38fr) minmax(0, 0.62fr);
+      gap: 1.5rem;
+      min-height: clamp(22rem, calc(100vh - 22rem), 40rem);
+    }
+  }
+
+  .mc-status-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid rgba(216, 222, 230, 0.9);
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .mc-status-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.45rem 0.85rem;
+    border-right: 1px solid rgba(216, 222, 230, 0.85);
+  }
+
+  .mc-status-item:last-child {
+    border-right: 0;
+  }
+
+  .mc-cta-banner {
+    background: linear-gradient(105deg, #0f9aa8 0%, #0b6f7a 48%, #1a2332 100%);
+    color: #fff;
+    border-radius: 1.15rem 0.35rem 1.15rem 0.45rem;
+    box-shadow: 0 14px 36px -18px rgba(15, 154, 168, 0.55);
+  }
+
+  .mc-empty-network {
+    position: relative;
+    min-height: 11rem;
+  }
+
+  .mc-empty-node {
+    position: absolute;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.85rem 0.25rem 0.85rem 0.35rem;
+    border: 1px dashed rgba(15, 154, 168, 0.35);
+    background: rgba(215, 242, 245, 0.45);
+  }
+
+  .mc-empty-node::after {
+    content: '';
+    position: absolute;
+    inset: 0.55rem;
+    border-radius: inherit;
+    background: rgba(15, 154, 168, 0.12);
+  }
+
+  .mc-empty-link {
+    position: absolute;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(15, 154, 168, 0.45), transparent);
+    overflow: hidden;
+  }
+
+  .mc-empty-link::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 6px;
+    height: 5px;
+    border-radius: 999px;
+    background: #0f9aa8;
+    animation: flow-dot 4.8s ease-in-out infinite;
+  }
+
+  .mc-empty-timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.7rem 0;
+    opacity: 0.4;
+  }
+
+  .mc-empty-timeline-bar {
+    height: 0.55rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #d8dee6, #eef1f4);
+  }
 }
 
 @layer utilities {
@@ -32,23 +258,162 @@ html {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
-  /* Safe area for notched devices */
+
   .safe-area-top {
     padding-top: env(safe-area-inset-top);
   }
-  
+
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  
-  /* Touch-friendly active states */
+
   .touch-active:active {
-    @apply scale-95 opacity-80;
+    transform: scale(0.95);
+    opacity: 0.8;
   }
-  
-  /* Native app transitions */
+
   .app-transition {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flow-dot {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(220px);
+    opacity: 0;
+  }
+}
+
+@keyframes deliverability-scan-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes deliverability-pulse-ring {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes outbound-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.7;
+  }
+}
+
+@keyframes outbound-spin-soft {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.deliverability-scan-ring {
+  animation: deliverability-pulse-ring 1.8s ease-in-out infinite;
+}
+
+.deliverability-scan-beam {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(15, 154, 168, 0.22) 40deg,
+    transparent 80deg
+  );
+  animation: deliverability-scan-rotate 2.8s linear infinite;
+  mix-blend-mode: multiply;
+}
+
+.status-queued-dot {
+  background: #94a3b8;
+  animation: outbound-pulse 1.8s ease-in-out infinite;
+}
+.status-processing-dot {
+  background: #0f9aa8;
+  animation: outbound-spin-soft 1.2s linear infinite;
+  border-radius: 2px;
+}
+.status-sent-dot {
+  background: #059669;
+}
+.status-failed-dot {
+  background: #dc2626;
+}
+.status-cancelled-dot {
+  background: #64748b;
+}
+.status-scheduled-dot {
+  background: #d97706;
+  animation: outbound-pulse 2.2s ease-in-out infinite;
+}
+
+.status-queued-chip {
+  background: #f1f5f9;
+  color: #475569;
+}
+.status-processing-chip {
+  background: #ecfeff;
+  color: #0f766e;
+}
+.status-sent-chip {
+  background: #ecfdf5;
+  color: #047857;
+}
+.status-failed-chip {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.status-cancelled-chip {
+  background: #f8fafc;
+  color: #64748b;
+}
+.status-scheduled-chip {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

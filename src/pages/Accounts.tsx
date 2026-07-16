@@ -1,92 +1,324 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Mail } from 'lucide-react'
-import { accountApi } from '../services/api'
-import { Account } from '../types'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Plus,
+  Trash2,
+  Mail,
+  Pencil,
+  RefreshCw,
+  ShieldAlert,
+} from 'lucide-react'
+import { accountApi, brandApi } from '../services/api'
+import { APP_DISPLAY_NAME } from '../config/app'
+
+type ProviderKind = 'imap' | 'gmail' | 'outlook'
+
+type AccountRow = {
+  id: number
+  name: string
+  email: string
+  brand_id?: number | null
+  brand_name?: string | null
+  brand_accent_color?: string | null
+  imap_host?: string
+  imap_port?: number
+  imap_user?: string
+  imap_secure?: boolean
+  smtp_host?: string | null
+  smtp_port?: number | null
+  smtp_user?: string | null
+  smtp_secure?: boolean
+  provider?: string
+  is_active: boolean
+  imap_connection_status?: string | null
+  smtp_connection_status?: string | null
+  last_connection_test_at?: string | null
+  channel_last_tested_at?: string | null
+  sender_display_name?: string | null
+  reply_to?: string | null
+}
+
+const providerPresets: Record<ProviderKind, Partial<FormState>> = {
+  imap: {},
+  gmail: {
+    imap_host: 'imap.gmail.com',
+    imap_port: 993,
+    imap_secure: true,
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: 587,
+    smtp_secure: false,
+  },
+  outlook: {
+    imap_host: 'outlook.office365.com',
+    imap_port: 993,
+    imap_secure: true,
+    smtp_host: 'smtp.office365.com',
+    smtp_port: 587,
+    smtp_secure: false,
+  },
+}
+
+type FormState = {
+  brand_id: string
+  name: string
+  email: string
+  provider: ProviderKind
+  imap_host: string
+  imap_port: number
+  imap_secure: boolean
+  smtp_host: string
+  smtp_port: number
+  smtp_secure: boolean
+  imap_user: string
+  imap_password: string
+  smtp_password: string
+  sender_display_name: string
+  reply_to: string
+  is_active: boolean
+  test_connection: boolean
+}
+
+const emptyForm = (): FormState => ({
+  brand_id: '',
+  name: '',
+  email: '',
+  provider: 'imap',
+  imap_host: '',
+  imap_port: 993,
+  imap_secure: true,
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_secure: false,
+  imap_user: '',
+  imap_password: '',
+  smtp_password: '',
+  sender_display_name: '',
+  reply_to: '',
+  is_active: true,
+  test_connection: true,
+})
+
+function statusLabel(status?: string | null) {
+  if (status === 'ok') return { text: 'Bağlı', className: 'text-emerald-700 bg-emerald-50' }
+  if (status === 'error') return { text: 'Hata', className: 'text-red-700 bg-red-50' }
+  return { text: 'Bilinmiyor', className: 'text-ink-faint bg-canvas-soft' }
+}
+
+function formatTestTime(value?: string | null) {
+  if (!value) return 'Henüz test edilmedi'
+  try {
+    return new Date(value).toLocaleString('tr-TR')
+  } catch {
+    return 'Henüz test edilmedi'
+  }
+}
 
 export default function Accounts() {
-  const [showForm, setShowForm] = useState(false)
   const queryClient = useQueryClient()
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<AccountRow | null>(null)
+  const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
 
-  const { data: accounts, isLoading } = useQuery<{ data: Account[] }>({
+  const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
-    queryFn: accountApi.getAccounts,
+    queryFn: async () => {
+      const res = await accountApi.getAccounts()
+      return Array.isArray(res.data) ? (res.data as AccountRow[]) : []
+    },
+  })
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ['brands'],
+    queryFn: async () => {
+      const res = await brandApi.list()
+      return Array.isArray(res.data) ? res.data : []
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => accountApi.deleteAccount(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+      queryClient.invalidateQueries({ queryKey: ['sender-identities'] })
+      setInfo('Hesap silindi')
     },
+    onError: (err: any) => setError(err.response?.data?.error || 'Hesap silinemedi'),
   })
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded-xl"></div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  const accountList = accounts?.data || []
+  const testMutation = useMutation({
+    mutationFn: (id: number) => accountApi.testConnection({ account_id: id }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      setInfo(res.data?.message || (res.data?.success ? 'Bağlantı başarılı' : 'Bağlantı başarısız'))
+      if (!res.data?.success) {
+        setError(res.data?.message || 'Bağlantı testi başarısız')
+      } else {
+        setError('')
+      }
+    },
+    onError: (err: any) =>
+      setError(err.response?.data?.error || err.response?.data?.message || 'Bağlantı testi başarısız'),
+  })
 
   return (
-    <div className="p-4 lg:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-4 lg:mb-6">
-        <h1 className="text-base lg:text-lg font-medium text-gray-800">Hesaplar</h1>
+    <div className="mc-shell pt-1 pb-8">
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">Bağlantılar</p>
+          <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">Hesaplar</h1>
+          <p className="text-sm text-ink-soft mt-1">
+            {APP_DISPLAY_NAME} altında markaya bağlı gerçek e-posta hesaplarını güvenli biçimde yönetin.
+          </p>
+        </div>
         <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 bg-primary-500 text-white text-xs lg:text-sm font-normal rounded-xl hover:bg-primary-600 transition-colors"
+          onClick={() => {
+            setEditing(null)
+            setShowForm(true)
+            setError('')
+          }}
+          disabled={brands.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl rounded-tr-sm hover:bg-dock-raised transition-colors disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Hesap Ekle</span>
-          <span className="sm:hidden">Ekle</span>
+          Hesap ekle
         </button>
       </div>
 
-      <div className="space-y-2 lg:space-y-3">
-        {accountList.map((account) => (
-          <div
-            key={account.id}
-            className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 lg:p-5 flex items-center justify-between hover:shadow-md active:scale-98 transition-all"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                <Mail className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">{account.name}</p>
-                <p className="text-xs text-gray-400">{account.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => deleteMutation.mutate(account.id)}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+      {brands.length === 0 && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 flex gap-2">
+          <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+          Önce Markalar ekranından en az bir marka oluşturun.
+        </div>
+      )}
 
-        {accountList.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-            <Mail className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-sm text-gray-600">Henüz hesap yok</p>
-            <p className="text-xs text-gray-400 mt-1">Başlamak için ilk e-posta hesabınızı ekleyin</p>
-          </div>
-        )}
-      </div>
+      {error && (
+        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{error}</div>
+      )}
+      {info && !error && (
+        <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">{info}</div>
+      )}
+
+      {isLoading ? (
+        <div className="animate-pulse grid gap-3 md:grid-cols-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-40 bg-canvas-line/50 rounded-2xl" />
+          ))}
+        </div>
+      ) : accounts.length === 0 ? (
+        <div className="mc-panel mc-panel-asymmetric p-8 text-center">
+          <Mail className="w-10 h-10 text-ink-faint mx-auto mb-3" />
+          <p className="text-ink font-medium">Henüz e-posta hesabı yok</p>
+          <p className="text-sm text-ink-soft mt-1">
+            Marka seçerek IMAP/SMTP ile gerçek hesabınızı bağlayın.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {accounts.map((account) => {
+            const imap = statusLabel(account.imap_connection_status)
+            const smtp = statusLabel(account.smtp_connection_status)
+            const testedAt = account.last_connection_test_at || account.channel_last_tested_at
+            return (
+              <div
+                key={account.id}
+                className="mc-panel mc-panel-asymmetric p-5 flex flex-col gap-4 hover:-translate-y-0.5 transition-transform"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: account.brand_accent_color || '#0f9aa8' }}
+                      />
+                      <p className="text-xs uppercase tracking-[0.12em] text-ink-faint truncate">
+                        {account.brand_name || 'Marka atanmadı'}
+                      </p>
+                    </div>
+                    <p className="font-display text-lg text-ink truncate">{account.name}</p>
+                    <p className="text-sm text-ink-soft truncate">{account.email}</p>
+                  </div>
+                  <span
+                    className={`text-[11px] px-2 py-1 rounded-lg ${
+                      account.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-canvas-soft text-ink-faint'
+                    }`}
+                  >
+                    {account.is_active ? 'Aktif' : 'Pasif'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={`rounded-xl px-3 py-2 ${imap.className}`}>
+                    <p className="uppercase tracking-[0.12em] opacity-70">IMAP</p>
+                    <p className="font-medium mt-0.5">{imap.text}</p>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2 ${smtp.className}`}>
+                    <p className="uppercase tracking-[0.12em] opacity-70">SMTP</p>
+                    <p className="font-medium mt-0.5">{smtp.text}</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-ink-faint">Son test: {formatTestTime(testedAt)}</p>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setError('')
+                      setInfo('')
+                      testMutation.mutate(account.id)
+                    }}
+                    disabled={testMutation.isPending}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-xl bg-canvas-soft text-ink hover:bg-canvas-line transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${testMutation.isPending ? 'animate-spin' : ''}`} />
+                    Yeniden test et
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditing(account)
+                      setShowForm(true)
+                      setError('')
+                    }}
+                    className="p-2 rounded-xl text-ink-faint hover:text-ink hover:bg-canvas-soft transition-colors"
+                    aria-label="Düzenle"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Bu hesabı silmek istediğinize emin misiniz?')) {
+                        deleteMutation.mutate(account.id)
+                      }
+                    }}
+                    className="p-2 rounded-xl text-ink-faint hover:text-red-500 hover:bg-red-50 transition-colors"
+                    aria-label="Sil"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {showForm && (
-        <AddAccountModal
-          onClose={() => setShowForm(false)}
+        <AccountFormModal
+          brands={brands}
+          editing={editing}
+          onClose={() => {
+            setShowForm(false)
+            setEditing(null)
+          }}
           onSuccess={() => {
             setShowForm(false)
+            setEditing(null)
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+            queryClient.invalidateQueries({ queryKey: ['sender-identities'] })
+            setInfo(editing ? 'Hesap güncellendi' : 'Hesap eklendi')
+            setError('')
           }}
         />
       )}
@@ -94,156 +326,392 @@ export default function Accounts() {
   )
 }
 
-interface AddAccountModalProps {
+function AccountFormModal({
+  brands,
+  editing,
+  onClose,
+  onSuccess,
+}: {
+  brands: any[]
+  editing: AccountRow | null
   onClose: () => void
   onSuccess: () => void
-}
-
-function AddAccountModal({ onClose, onSuccess }: AddAccountModalProps) {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    company_name: '',
-    imap_host: '',
-    imap_port: 993,
-    imap_user: '',
-    imap_password: '',
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_user: '',
-    smtp_password: '',
-  })
+}) {
+  const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
+  const [testing, setTesting] = useState(false)
 
-  const createMutation = useMutation({
-    mutationFn: (data: any) => accountApi.createAccount(data),
-    onSuccess: () => {
-      onSuccess()
+  useEffect(() => {
+    if (!editing) {
+      setForm({
+        ...emptyForm(),
+        brand_id: brands[0] ? String(brands[0].id) : '',
+      })
+      return
+    }
+
+    setForm({
+      brand_id: editing.brand_id ? String(editing.brand_id) : brands[0] ? String(brands[0].id) : '',
+      name: editing.name || '',
+      email: editing.email || '',
+      provider: (editing.provider === 'gmail' || editing.provider === 'outlook'
+        ? editing.provider
+        : 'imap') as ProviderKind,
+      imap_host: editing.imap_host || '',
+      imap_port: editing.imap_port || 993,
+      imap_secure: editing.imap_secure !== false,
+      smtp_host: editing.smtp_host || '',
+      smtp_port: editing.smtp_port || 587,
+      smtp_secure: Boolean(editing.smtp_secure),
+      imap_user: editing.imap_user || editing.email || '',
+      imap_password: '',
+      smtp_password: '',
+      sender_display_name: editing.sender_display_name || editing.name || '',
+      reply_to: editing.reply_to || '',
+      is_active: editing.is_active !== false,
+      test_connection: true,
+    })
+  }, [editing, brands])
+
+  const oauthHint = useMemo(() => {
+    if (form.provider === 'gmail') {
+      return 'Google için bu aşamada OAuth yok. Gmail uygulama parolası veya özel IMAP/SMTP kullanın.'
+    }
+    if (form.provider === 'outlook') {
+      return 'Microsoft için bu aşamada OAuth yok. Uygulama parolası veya özel IMAP/SMTP kullanın.'
+    }
+    return null
+  }, [form.provider])
+
+  const applyProvider = (provider: ProviderKind) => {
+    const preset = providerPresets[provider]
+    setForm((prev) => ({
+      ...prev,
+      provider,
+      ...preset,
+    }))
+  }
+
+  const buildPayload = () => {
+    const payload: Record<string, unknown> = {
+      brand_id: Number(form.brand_id),
+      name: form.name,
+      email: form.email,
+      provider: form.provider,
+      imap_host: form.imap_host,
+      imap_port: form.imap_port,
+      imap_user: form.imap_user || form.email,
+      imap_secure: form.imap_secure,
+      smtp_host: form.smtp_host || null,
+      smtp_port: form.smtp_port,
+      smtp_user: form.imap_user || form.email,
+      smtp_secure: form.smtp_secure,
+      sender_display_name: form.sender_display_name || form.name,
+      reply_to: form.reply_to || null,
+      is_active: form.is_active,
+      test_connection: form.test_connection,
+    }
+
+    if (form.imap_password) payload.imap_password = form.imap_password
+    if (form.smtp_password) payload.smtp_password = form.smtp_password
+    else if (form.imap_password) payload.smtp_password = form.imap_password
+
+    return payload
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload = buildPayload()
+      if (!editing && !payload.imap_password) {
+        throw { response: { data: { error: 'Parola zorunludur' } } }
+      }
+      if (editing) {
+        return accountApi.updateAccount(editing.id, payload)
+      }
+      return accountApi.createAccount(payload)
     },
-    onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to create account')
-    },
+    onSuccess: () => onSuccess(),
+    onError: (err: any) => setError(err.response?.data?.error || 'Hesap kaydedilemedi'),
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleTest = async () => {
+    setError('')
+    setTesting(true)
+    try {
+      const payload = buildPayload()
+      const body: Record<string, unknown> = editing
+        ? { account_id: editing.id, ...payload }
+        : payload
+
+      if (!editing && !payload.imap_password) {
+        setError('Test için parola gerekli')
+        return
+      }
+
+      const res = await accountApi.testConnection(body)
+      if (res.data?.success) {
+        setError('')
+        setInfo(res.data.message || 'Bağlantı başarılı')
+      } else {
+        setInfo('')
+        setError(res.data?.message || 'Bağlantı testi başarısız')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.response?.data?.message || 'Bağlantı testi başarısız')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     setError('')
-    createMutation.mutate(formData)
+    saveMutation.mutate()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-auto">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-medium text-gray-800">E-posta Hesabı Ekle</h2>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <form
+        onSubmit={onSubmit}
+        className="bg-white rounded-2xl rounded-tr-md w-full max-w-2xl max-h-[92vh] overflow-auto p-6 space-y-4"
+      >
+        <div>
+          <h2 className="font-display text-lg text-ink">
+            {editing ? 'Hesabı düzenle' : 'E-posta hesabı ekle'}
+          </h2>
+          <p className="text-xs text-ink-soft mt-1">Parola API cevaplarında asla geri doldurulmaz.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
+        {error && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{error}</div>
+        )}
+        {info && !error && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">{info}</div>
+        )}
 
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">Hesap Adı</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2.5 text-sm bg-gray-100 border-0 rounded-xl focus:outline-none focus:bg-white focus:shadow-sm transition-all"
-              placeholder="İş E-postası"
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Marka</span>
+            <select
               required
-            />
-          </div>
+              value={form.brand_id}
+              onChange={(e) => setForm({ ...form, brand_id: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            >
+              <option value="" disabled>
+                Marka seçin
+              </option>
+              {brands.map((brand: any) => (
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <div>
-            <label className="block text-sm text-gray-600 mb-2">Firma Adı (Opsiyonel)</label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Hesap görünen adı</span>
             <input
-              type="text"
-              value={formData.company_name}
-              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              className="w-full px-4 py-2.5 text-sm bg-gray-100 border-0 rounded-xl focus:outline-none focus:bg-white focus:shadow-sm transition-all"
-              placeholder="Mercan Danışmanlık"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
             />
-          </div>
+          </label>
 
-          <div>
-            <label className="block text-sm font-normal text-gray-700 mb-2">Email</label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">E-posta adresi</span>
             <input
+              required
               type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="you@example.com"
-              required
+              value={form.email}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  email: e.target.value,
+                  imap_user: form.imap_user || e.target.value,
+                })
+              }
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
             />
-          </div>
+          </label>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-normal text-gray-700 mb-2">IMAP Host</label>
-              <input
-                type="text"
-                value={formData.imap_host}
-                onChange={(e) => setFormData({ ...formData, imap_host: e.target.value })}
-                className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="imap.gmail.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-normal text-gray-700 mb-2">IMAP Port</label>
-              <input
-                type="number"
-                value={formData.imap_port}
-                onChange={(e) => setFormData({ ...formData, imap_port: parseInt(e.target.value) })}
-                className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
-              />
-            </div>
-          </div>
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Sağlayıcı</span>
+            <select
+              value={form.provider}
+              onChange={(e) => applyProvider(e.target.value as ProviderKind)}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            >
+              <option value="imap">Özel SMTP/IMAP</option>
+              <option value="gmail">Google</option>
+              <option value="outlook">Microsoft</option>
+            </select>
+          </label>
+        </div>
 
-          <div>
-            <label className="block text-sm font-normal text-gray-700 mb-2">IMAP Username</label>
+        {oauthHint && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+            {oauthHint}
+          </div>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">IMAP host</span>
             <input
-              type="text"
-              value={formData.imap_user}
-              onChange={(e) => setFormData({ ...formData, imap_user: e.target.value })}
-              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
+              value={form.imap_host}
+              onChange={(e) => setForm({ ...form, imap_host: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
             />
-          </div>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">IMAP port</span>
+            <input
+              required
+              type="number"
+              value={form.imap_port}
+              onChange={(e) => setForm({ ...form, imap_port: Number(e.target.value) })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 sm:col-span-3 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              checked={form.imap_secure}
+              onChange={(e) => setForm({ ...form, imap_secure: e.target.checked })}
+            />
+            IMAP SSL/TLS
+          </label>
+        </div>
 
-          <div>
-            <label className="block text-sm font-normal text-gray-700 mb-2">IMAP Password</label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">SMTP host</span>
+            <input
+              value={form.smtp_host}
+              onChange={(e) => setForm({ ...form, smtp_host: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">SMTP port</span>
+            <input
+              type="number"
+              value={form.smtp_port}
+              onChange={(e) => setForm({ ...form, smtp_port: Number(e.target.value) })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 sm:col-span-3 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              checked={form.smtp_secure}
+              onChange={(e) => setForm({ ...form, smtp_secure: e.target.checked })}
+            />
+            SMTP SSL/TLS
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Kullanıcı adı</span>
+            <input
+              required
+              value={form.imap_user}
+              onChange={(e) => setForm({ ...form, imap_user: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">
+              Parola {editing ? '(boş bırakılırsa korunur)' : ''}
+            </span>
             <input
               type="password"
-              value={formData.imap_password}
-              onChange={(e) => setFormData({ ...formData, imap_password: e.target.value })}
-              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
+              autoComplete="new-password"
+              required={!editing}
+              value={form.imap_password}
+              onChange={(e) => setForm({ ...form, imap_password: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+              placeholder={editing ? '••••••••' : ''}
             />
-          </div>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">SMTP parola (opsiyonel)</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={form.smtp_password}
+              onChange={(e) => setForm({ ...form, smtp_password: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+              placeholder="Boşsa IMAP parolası kullanılır"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Varsayılan gönderen adı</span>
+            <input
+              value={form.sender_display_name}
+              onChange={(e) => setForm({ ...form, sender_display_name: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-ink-faint uppercase tracking-[0.12em]">Reply-To</span>
+            <input
+              type="email"
+              value={form.reply_to}
+              onChange={(e) => setForm({ ...form, reply_to: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ink-soft pt-6">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+            />
+            Aktif
+          </label>
+          {!editing && (
+            <label className="flex items-center gap-2 text-sm text-ink-soft pt-6">
+              <input
+                type="checkbox"
+                checked={form.test_connection}
+                onChange={(e) => setForm({ ...form, test_connection: e.target.checked })}
+              />
+              Kaydetmeden önce bağlantıyı test et
+            </label>
+          )}
+        </div>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm font-normal rounded-xl hover:bg-gray-200 transition-colors"
-            >
-              İptal
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="flex-1 py-2.5 bg-primary-500 text-white text-sm font-normal rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-50"
-            >
-              {createMutation.isPending ? 'Ekleniyor...' : 'Hesap Ekle'}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-canvas-soft text-sm text-ink"
+          >
+            İptal
+          </button>
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testing}
+            className="px-4 py-2.5 rounded-xl border border-canvas-line text-sm text-ink disabled:opacity-50"
+          >
+            {testing ? 'Test ediliyor...' : 'Bağlantıyı test et'}
+          </button>
+          <button
+            type="submit"
+            disabled={saveMutation.isPending}
+            className="ml-auto px-4 py-2.5 rounded-xl bg-dock text-white text-sm disabled:opacity-50"
+          >
+            {saveMutation.isPending ? 'Kaydediliyor...' : editing ? 'Güncelle' : 'Hesabı kaydet'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
