@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, Mail, Tag, Clock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import axios from 'axios'
+import { api } from '../services/api'
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
@@ -9,7 +9,7 @@ export default function Analytics() {
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['analytics'],
     queryFn: async () => {
-      const res = await axios.get('/api/analytics/overview')
+      const res = await api.get('/analytics/overview')
       return res.data.data
     }
   })

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Building2, Mail, ChevronDown } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../services/api'
 import { MailListSkeleton } from '../components/common/SkeletonLoader'
 import EmptyState from '../components/common/EmptyState'
 
@@ -11,7 +11,7 @@ export default function CompanyInbox() {
   const { data: companies, isLoading: companiesLoading } = useQuery({
     queryKey: ['companies'],
     queryFn: async () => {
-      const res = await axios.get('/api/inbox/companies')
+      const res = await api.get('/inbox/companies')
       return res.data.data
     }
   })
@@ -20,7 +20,7 @@ export default function CompanyInbox() {
     queryKey: ['grouped-inbox', selectedCompany],
     queryFn: async () => {
       const params = selectedCompany ? { company_name: selectedCompany } : {}
-      const res = await axios.get('/api/inbox/grouped', { params })
+      const res = await api.get('/inbox/grouped', { params })
       return res.data.data
     }
   })

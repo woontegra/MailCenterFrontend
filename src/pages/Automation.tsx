@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Edit, Power, Zap } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../services/api'
 import { useNotificationStore } from '../store/notificationStore'
 
 export default function Automation() {
@@ -13,13 +13,13 @@ export default function Automation() {
   const { data: rules, isLoading } = useQuery({
     queryKey: ['automation-rules'],
     queryFn: async () => {
-      const res = await axios.get('/api/automation')
+      const res = await api.get('/automation')
       return res.data.data
     }
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => axios.delete(`/api/automation/${id}`),
+    mutationFn: (id: number) => api.delete(`/automation/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automation-rules'] })
       addToast({ type: 'success', title: 'Kural silindi' })
@@ -27,7 +27,7 @@ export default function Automation() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, is_active }: any) => axios.put(`/api/automation/${id}`, { is_active }),
+    mutationFn: ({ id, is_active }: any) => api.put(`/automation/${id}`, { is_active }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automation-rules'] })
       addToast({ type: 'success', title: 'Kural güncellendi' })
@@ -148,9 +148,9 @@ function RuleForm({ rule, onClose, onSuccess }: any) {
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
       if (rule) {
-        return axios.put(`/api/automation/${rule.id}`, data)
+        return api.put(`/automation/${rule.id}`, data)
       }
-      return axios.post('/api/automation', data)
+      return api.post('/automation', data)
     },
     onSuccess: () => {
       addToast({ type: 'success', title: rule ? 'Kural güncellendi' : 'Kural oluşturuldu' })

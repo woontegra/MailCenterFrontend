@@ -1,15 +1,14 @@
 import { useRef, useState } from 'react'
-import { Star, Trash2, Archive } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
 
 interface SwipeableMailItemProps {
-  mail: any
   onStar: () => void
   onDelete: () => void
   onClick: () => void
   children: React.ReactNode
 }
 
-export default function SwipeableMailItem({ mail, onStar, onDelete, onClick, children }: SwipeableMailItemProps) {
+export default function SwipeableMailItem({ onStar, onDelete, onClick, children }: SwipeableMailItemProps) {
   const [translateX, setTranslateX] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
   const startX = useRef(0)

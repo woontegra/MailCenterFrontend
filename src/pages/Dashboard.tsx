@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Mail, Star, Inbox, TrendingUp } from 'lucide-react'
+import { Mail, Star, Inbox } from 'lucide-react'
 import { format } from 'date-fns'
 import { dashboardApi, mailApi } from '../services/api'
 import { DashboardStats } from '../types'

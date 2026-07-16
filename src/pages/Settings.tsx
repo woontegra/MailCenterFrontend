@@ -1,12 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { User, Lock, Building, Bell, Zap } from 'lucide-react'
+import { User, Lock, Building, Bell } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore } from '../store/notificationStore'
 
 export default function Settings() {
-  const { user } = useAuthStore()
-  const { addToast } = useNotificationStore()
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'organization' | 'notifications'>('profile')
 
   const tabs = [

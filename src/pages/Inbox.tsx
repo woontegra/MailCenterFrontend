@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Star, Trash2, Mail as MailIcon, Filter, Plus, Send, X, RefreshCw, Search } from 'lucide-react'
+import { Star, Plus, Send, RefreshCw, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { mailApi, accountApi } from '../services/api'
 import { Mail } from '../types'
