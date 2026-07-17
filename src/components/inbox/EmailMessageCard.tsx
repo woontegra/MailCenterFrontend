@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Mail, Paperclip, Send } from 'lucide-react'
+import EmailHtmlFrame from './EmailHtmlFrame'
 
 export type TimelineMessage = {
   sourceId: string
@@ -7,14 +8,24 @@ export type TimelineMessage = {
   channelType: string
   sender: string | null
   recipient: string | null
+  cc?: string | null
   subject: string | null
   content: string | null
   contentType: string
+  htmlBody?: string | null
+  textBody?: string | null
+  sanitizedHtml?: string | null
   status: string | null
   providerMessageId: string | null
   sentAt: string | null
   receivedAt: string | null
-  attachments: Array<{ filename?: string; contentType?: string; sizeBytes?: number }>
+  attachments: Array<{
+    filename?: string
+    contentType?: string
+    sizeBytes?: number
+    contentId?: string
+    inline?: boolean
+  }>
   safeErrorMessage: string | null
 }
 
@@ -40,6 +51,15 @@ function formatBytes(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function wrapEmailDocument(fragment: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank" rel="noopener noreferrer"><style>
+html,body{margin:0;padding:12px;background:#fff;color:#1a2332;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere;}
+img,video{max-width:100%;height:auto;}
+table{max-width:100%;border-collapse:collapse;}
+a{word-break:break-word;}
+</style></head><body>${fragment}</body></html>`
+}
+
 type Props = {
   message: TimelineMessage
 }
@@ -57,6 +77,12 @@ export default function EmailMessageCard({ message }: Props) {
   const outbound = message.direction === 'OUTBOUND'
   const when = formatTime(message.sentAt || message.receivedAt)
   const [metaOpen, setMetaOpen] = useState(true)
+
+  const htmlFragment = message.sanitizedHtml || null
+  const plainText =
+    message.textBody ||
+    (message.contentType !== 'text/html' ? message.content : null) ||
+    (!htmlFragment ? message.content : null)
 
   return (
     <article
@@ -114,6 +140,7 @@ export default function EmailMessageCard({ message }: Props) {
           <div className="space-y-2 pt-1">
             <MetaRow label="Kimden" value={message.sender || '—'} />
             <MetaRow label="Kime" value={message.recipient || '—'} />
+            {message.cc ? <MetaRow label="Cc" value={message.cc} /> : null}
           </div>
         )}
       </header>
@@ -135,12 +162,16 @@ export default function EmailMessageCard({ message }: Props) {
         </div>
       )}
 
-      <div className="px-5 py-4 min-w-0 overflow-x-auto">
-        <div className="max-w-4xl">
-          <p className="text-[15px] text-ink whitespace-pre-wrap break-words leading-7">
-            {message.content || '(İçerik yok)'}
-          </p>
-        </div>
+      <div className="px-5 py-4 min-w-0">
+        {htmlFragment ? (
+          <EmailHtmlFrame html={wrapEmailDocument(htmlFragment)} title={message.subject || 'E-posta'} />
+        ) : (
+          <div className="max-w-4xl">
+            <p className="text-[15px] text-ink whitespace-pre-wrap break-words leading-7">
+              {plainText || '(İçerik yok)'}
+            </p>
+          </div>
+        )}
       </div>
 
       {(message.status || message.safeErrorMessage) && (
