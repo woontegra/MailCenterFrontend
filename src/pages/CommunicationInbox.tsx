@@ -100,7 +100,7 @@ export default function CommunicationInbox() {
   const { data: conversationsPayload, isLoading } = useQuery({
     queryKey: ['conversations', listParams],
     queryFn: async () => (await conversationsApi.list(listParams)).data,
-    refetchInterval: 8000,
+    refetchInterval: 4000,
   })
   const conversations = Array.isArray(conversationsPayload?.data)
     ? conversationsPayload.data
@@ -112,6 +112,7 @@ export default function CommunicationInbox() {
     queryKey: ['conversation', selectedId],
     enabled: Boolean(selectedId),
     queryFn: async () => (await conversationsApi.get(selectedId!)).data?.data,
+    refetchInterval: selectedId ? 4000 : false,
   })
 
   const { data: messages = [] } = useQuery({
@@ -121,7 +122,7 @@ export default function CommunicationInbox() {
       const res = await conversationsApi.messages(selectedId!)
       return Array.isArray(res.data?.data) ? res.data.data : []
     },
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   })
 
   const { data: notes = [] } = useQuery({

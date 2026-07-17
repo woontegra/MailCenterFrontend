@@ -34,6 +34,11 @@ type AccountRow = {
   smtp_connection_status?: string | null
   last_connection_test_at?: string | null
   channel_last_tested_at?: string | null
+  last_inbound_at?: string | null
+  last_sync_at?: string | null
+  imap_idle_status?: string | null
+  imap_idle_error?: string | null
+  imap_listener_active?: boolean
   sender_display_name?: string | null
   reply_to?: string | null
 }
@@ -104,12 +109,41 @@ function statusLabel(status?: string | null) {
   return { text: 'Bilinmiyor', className: 'text-ink-faint bg-canvas-soft' }
 }
 
+function idleStatusLabel(account: AccountRow) {
+  if (!account.is_active) {
+    return { text: 'Pasif', className: 'text-ink-faint bg-canvas-soft' }
+  }
+  const status = (account.imap_idle_status || '').toUpperCase()
+  if (status === 'IDLE' && account.imap_listener_active) {
+    return { text: 'Canlı dinleniyor', className: 'text-emerald-700 bg-emerald-50' }
+  }
+  if (status === 'CONNECTING' || status === 'RECONNECTING') {
+    return { text: 'Yeniden bağlanıyor', className: 'text-amber-800 bg-amber-50' }
+  }
+  if (status === 'ERROR') {
+    return { text: 'Bağlantı hatası', className: 'text-red-700 bg-red-50' }
+  }
+  if (status === 'DISABLED') {
+    return { text: 'Dinleyici kapalı', className: 'text-ink-faint bg-canvas-soft' }
+  }
+  return statusLabel(account.imap_connection_status)
+}
+
 function formatTestTime(value?: string | null) {
   if (!value) return 'Henüz test edilmedi'
   try {
     return new Date(value).toLocaleString('tr-TR')
   } catch {
     return 'Henüz test edilmedi'
+  }
+}
+
+function formatInboundTime(value?: string | null) {
+  if (!value) return 'Henüz mail alınmadı'
+  try {
+    return new Date(value).toLocaleString('tr-TR')
+  } catch {
+    return 'Henüz mail alınmadı'
   }
 }
 
@@ -126,6 +160,7 @@ export default function Accounts() {
       const res = await accountApi.getAccounts()
       return Array.isArray(res.data) ? (res.data as AccountRow[]) : []
     },
+    refetchInterval: 10000,
   })
 
   const { data: brands = [] } = useQuery({
@@ -219,6 +254,7 @@ export default function Accounts() {
           {accounts.map((account) => {
             const imap = statusLabel(account.imap_connection_status)
             const smtp = statusLabel(account.smtp_connection_status)
+            const idle = idleStatusLabel(account)
             const testedAt = account.last_connection_test_at || account.channel_last_tested_at
             return (
               <div
@@ -248,6 +284,14 @@ export default function Accounts() {
                   </span>
                 </div>
 
+                <div className={`rounded-xl px-3 py-2 text-xs ${idle.className}`}>
+                  <p className="uppercase tracking-[0.12em] opacity-70">Gelen posta</p>
+                  <p className="font-medium mt-0.5">{idle.text}</p>
+                  {account.imap_idle_status === 'ERROR' && account.imap_idle_error ? (
+                    <p className="mt-1 opacity-80 line-clamp-2">{account.imap_idle_error}</p>
+                  ) : null}
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className={`rounded-xl px-3 py-2 ${imap.className}`}>
                     <p className="uppercase tracking-[0.12em] opacity-70">IMAP</p>
@@ -259,7 +303,11 @@ export default function Accounts() {
                   </div>
                 </div>
 
-                <p className="text-xs text-ink-faint">Son test: {formatTestTime(testedAt)}</p>
+                <div className="text-xs text-ink-faint space-y-0.5">
+                  <p>Son mail: {formatInboundTime(account.last_inbound_at)}</p>
+                  <p>Son senkron: {formatTestTime(account.last_sync_at)}</p>
+                  <p>Son test: {formatTestTime(testedAt)}</p>
+                </div>
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
