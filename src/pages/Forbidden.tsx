@@ -10,14 +10,22 @@ export default function Forbidden() {
         <h1 className="font-display text-2xl font-semibold text-ink mb-2">Yetkisiz erişim</h1>
         <p className="text-sm text-ink-soft mb-6">
           Bu sayfayı görüntülemek için gerekli yetkiniz yok. Farklı bir hesapla giriş yapın veya
-          yöneticinizden yetki isteyin.
+          yöneticinizden yetki isteyin. Bu ekran ana sayfaya sessiz yönlendirme yapmaz.
         </p>
-        <Link
-          to="/"
-          className="inline-flex px-4 py-2.5 rounded-xl bg-dock text-white text-sm hover:bg-dock-raised"
-        >
-          Akışa dön
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link
+            to="/channels"
+            className="inline-flex px-4 py-2.5 rounded-xl border border-canvas-line text-sm hover:bg-canvas-soft"
+          >
+            Kanal Bağlantıları
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex px-4 py-2.5 rounded-xl bg-dock text-white text-sm hover:bg-dock-raised"
+          >
+            Akışa dön
+          </Link>
+        </div>
       </div>
     </div>
   )

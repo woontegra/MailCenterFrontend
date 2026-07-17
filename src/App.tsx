@@ -12,6 +12,8 @@ import Automation from './pages/Automation'
 import CompanyInbox from './pages/CompanyInbox'
 import Brands from './pages/Brands'
 import Channels from './pages/Channels'
+import ChannelSmsSetup from './pages/ChannelSmsSetup'
+import ChannelWhatsAppSetup from './pages/ChannelWhatsAppSetup'
 import SenderIdentities from './pages/SenderIdentities'
 import Templates from './pages/Templates'
 import TemplateEditorPage from './pages/TemplateEditor'
@@ -152,7 +154,25 @@ function App() {
               </RequirePermission>
             }
           />
-          <Route path="channels" element={<Channels />} />
+          <Route path="channels">
+            <Route index element={<Channels />} />
+            <Route
+              path="sms/setup"
+              element={
+                <RequirePermission permission="CHANNEL_MANAGE">
+                  <ChannelSmsSetup />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="whatsapp/setup"
+              element={
+                <RequirePermission permission="CHANNEL_MANAGE">
+                  <ChannelWhatsAppSetup />
+                </RequirePermission>
+              }
+            />
+          </Route>
           <Route path="sender-identities" element={<SenderIdentities />} />
           <Route
             path="templates"

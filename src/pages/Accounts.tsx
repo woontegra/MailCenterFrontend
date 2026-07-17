@@ -202,7 +202,9 @@ export default function Accounts() {
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">Bağlantılar</p>
-          <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">Hesaplar</h1>
+          <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">
+            E-posta Hesapları
+          </h1>
           <p className="text-sm text-ink-soft mt-1">
             {APP_DISPLAY_NAME} altında markaya bağlı gerçek e-posta hesaplarını güvenli biçimde yönetin.
           </p>

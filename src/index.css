@@ -407,6 +407,549 @@ html {
   color: #b45309;
 }
 
+/* ── Login page ── */
+.mc-login-bg {
+  isolation: isolate;
+}
+
+.mc-login-grid-fine {
+  background-image: radial-gradient(rgba(15, 154, 168, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.mc-login-grid-bold {
+  background-image:
+    linear-gradient(rgba(26, 35, 50, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 35, 50, 0.05) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.mc-login-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  animation: login-glow-drift 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.mc-login-glow-a {
+  width: 55vw;
+  max-width: 680px;
+  height: 55vw;
+  max-height: 680px;
+  top: -15%;
+  left: -10%;
+  background: radial-gradient(circle, rgba(15, 154, 168, 0.28) 0%, transparent 68%);
+}
+
+.mc-login-glow-b {
+  width: 45vw;
+  max-width: 560px;
+  height: 45vw;
+  max-height: 560px;
+  bottom: -10%;
+  right: 5%;
+  background: radial-gradient(circle, rgba(26, 35, 50, 0.14) 0%, transparent 70%);
+  animation-delay: -7s;
+}
+
+.mc-login-glow-c {
+  width: 380px;
+  height: 380px;
+  top: 35%;
+  left: 42%;
+  background: radial-gradient(circle, rgba(15, 154, 168, 0.16) 0%, transparent 72%);
+  animation-delay: -12s;
+}
+
+/* Tam ekran mesh */
+.mc-login-mesh-path {
+  stroke: rgba(15, 154, 168, 0.22);
+  stroke-dasharray: 10 14;
+  animation: login-mesh-flow 8s linear infinite;
+}
+
+.mc-login-mesh-path-1 { animation-delay: -2.5s; stroke: rgba(26, 35, 50, 0.12); }
+.mc-login-mesh-path-2 { animation-delay: -5s; }
+
+.mc-login-mesh-node {
+  fill: #0f9aa8;
+  opacity: 0.75;
+  animation: login-node-blink 3s ease-in-out infinite;
+}
+
+.mc-login-mesh-node-1 { animation-delay: -0.8s; }
+.mc-login-mesh-node-2 { animation-delay: -1.6s; }
+.mc-login-mesh-node-3 { animation-delay: -2.4s; }
+
+.mc-login-mesh-ring {
+  fill: none;
+  stroke: rgba(15, 154, 168, 0.2);
+  stroke-width: 1;
+  animation: login-ring-pulse 4s ease-in-out infinite;
+}
+
+/* Yüzen halkalar */
+.mc-login-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 154, 168, 0.18);
+  animation: login-ring-spin 40s linear infinite;
+}
+
+.mc-login-ring-1 {
+  width: 420px;
+  height: 420px;
+  top: 8%;
+  right: 8%;
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.mc-login-ring-2 {
+  width: 280px;
+  height: 280px;
+  bottom: 12%;
+  left: 20%;
+  animation-direction: reverse;
+  animation-duration: 32s;
+  opacity: 0.35;
+}
+
+.mc-login-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(15, 154, 168, 0.25);
+  box-shadow: 0 0 40px rgba(15, 154, 168, 0.12);
+  backdrop-filter: blur(4px);
+  animation: login-float 16s ease-in-out infinite;
+}
+
+.mc-login-orb-1 {
+  width: 160px;
+  height: 160px;
+  top: 12%;
+  right: 18%;
+}
+
+.mc-login-orb-2 {
+  width: 90px;
+  height: 90px;
+  bottom: 20%;
+  left: 12%;
+  animation-delay: -6s;
+}
+
+/* Veri akış çizgileri */
+.mc-login-stream {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(15, 154, 168, 0.35), transparent);
+  overflow: hidden;
+}
+
+.mc-login-stream-1 { top: 28%; left: 5%; width: 38%; }
+.mc-login-stream-2 { top: 52%; left: 15%; width: 45%; }
+.mc-login-stream-3 { top: 72%; left: 8%; width: 32%; }
+
+@media (max-width: 1023px) {
+  .mc-login-stream {
+    display: none;
+  }
+
+  .mc-login-orb,
+  .mc-login-glow-c {
+    display: none;
+  }
+}
+
+.mc-login-stream-dot {
+  position: absolute;
+  top: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0f9aa8;
+  box-shadow: 0 0 12px rgba(15, 154, 168, 0.7);
+  animation: login-stream-travel 3.5s ease-in-out infinite;
+}
+
+.mc-login-stream-dot-d1 { animation-delay: -1.2s; }
+.mc-login-stream-dot-d2 { animation-delay: -2.4s; }
+.mc-login-stream-dot-d3 { animation-delay: -0.6s; }
+
+.mc-login-vignette {
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(238, 242, 246, 0.55) 100%);
+}
+
+/* Ağ hub görseli */
+.mc-login-network-wrap {
+  padding: 1rem 0;
+}
+
+.mc-login-corner-network {
+  /* Mobil / tablet / dar masaüstü: gizle — form ve yazıyla çakışmasın */
+  display: none;
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  width: 260px;
+  height: auto;
+  overflow: visible;
+  opacity: 0.88;
+  z-index: 0;
+  filter: drop-shadow(0 18px 32px rgba(15, 154, 168, 0.08));
+}
+
+@media (min-width: 1280px) {
+  .mc-login-corner-network {
+    display: block;
+    top: 1.5rem;
+    right: max(1.5rem, calc((100vw - 1100px) / 2 - 0.5rem));
+    width: min(300px, 22vw);
+  }
+}
+
+@media (min-width: 1536px) {
+  .mc-login-corner-network {
+    top: 2rem;
+    width: 340px;
+  }
+}
+
+.mc-login-corner-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.mc-login-network-lines .mc-login-net-path {
+  stroke: rgba(15, 154, 168, 0.45);
+  stroke-dasharray: 8 10;
+  animation: login-mesh-flow 5s linear infinite;
+}
+
+.mc-login-corner-network .mc-login-net-path {
+  stroke: rgba(15, 154, 168, 0.42);
+  stroke-dasharray: 8 10;
+  animation: login-mesh-flow 5s linear infinite;
+}
+
+.mc-login-net-path-d1 { animation-delay: -1.5s; }
+.mc-login-net-path-d2 { animation-delay: -3s; }
+.mc-login-net-path-d3 { animation-delay: -4.5s; }
+
+.mc-login-packet {
+  fill: #1bb8c7;
+  filter: drop-shadow(0 0 4px rgba(15, 154, 168, 0.8));
+}
+
+.mc-login-net-node {
+  fill: rgba(255, 255, 255, 0.92);
+  stroke: rgba(15, 154, 168, 0.55);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-node-blink 3.5s ease-in-out infinite;
+}
+
+/* Köşe animasyonunda hafif pulse — kenardan kesilmesin */
+.mc-login-corner-network .mc-login-net-node {
+  animation: login-corner-node-pulse 3.5s ease-in-out infinite;
+}
+
+.mc-login-net-node-d1 { animation-delay: -1s; }
+.mc-login-net-node-d2 { animation-delay: -2s; }
+.mc-login-net-node-d3 { animation-delay: -3s; }
+
+.mc-login-hub-pulse {
+  animation: login-hub-breathe 4s ease-in-out infinite;
+}
+
+.mc-login-hub-ring {
+  stroke: rgba(15, 154, 168, 0.4);
+  stroke-width: 2;
+  stroke-dasharray: 6 8;
+  animation: login-ring-spin 20s linear infinite;
+  transform-origin: 210px 160px;
+}
+
+.mc-login-corner-hub-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-ring-spin 20s linear infinite;
+}
+
+.mc-login-corner-halo {
+  fill: rgba(15, 154, 168, 0.12);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-corner-halo-pulse 4.5s ease-in-out infinite;
+}
+
+.mc-login-hub-core {
+  fill: #1a2332;
+  stroke: #0f9aa8;
+  stroke-width: 3;
+}
+
+.mc-login-net-label {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  fill: #4a5565;
+  letter-spacing: 0.04em;
+}
+
+/* Hero */
+.mc-login-headline-accent {
+  background: linear-gradient(135deg, #0b6f7a 0%, #0f9aa8 50%, #1bb8c7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mc-login-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #4a5565;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 154, 168, 0.15);
+  backdrop-filter: blur(6px);
+}
+
+.mc-login-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(216, 222, 230, 0.7);
+}
+
+.mc-login-feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: linear-gradient(145deg, rgba(15, 154, 168, 0.12), rgba(15, 154, 168, 0.04));
+  color: #0b6f7a;
+  flex-shrink: 0;
+}
+
+/* Logo */
+.mc-login-logo-mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #1a2332 0%, #243044 100%);
+  box-shadow:
+    0 12px 32px -10px rgba(26, 35, 50, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: login-logo-float 5s ease-in-out infinite;
+}
+
+.mc-login-logo-mark-lg {
+  width: 3.75rem;
+  height: 3.75rem;
+}
+
+.mc-login-logo-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 1.15rem;
+  border: 2px solid rgba(15, 154, 168, 0.35);
+  animation: login-ring-pulse 3s ease-in-out infinite;
+}
+
+/* Form kartı */
+.mc-login-card {
+  position: relative;
+  padding: 2rem 1.85rem;
+  border-radius: 1.35rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(216, 222, 230, 0.85);
+  box-shadow: 0 24px 48px -20px rgba(21, 32, 43, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+@media (min-width: 1280px) {
+  .mc-login-card {
+    padding: 2.25rem 2rem;
+  }
+}
+
+.mc-login-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4a5565;
+  margin-bottom: 0.5rem;
+}
+
+.mc-login-field-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.125rem;
+  height: 1.125rem;
+  color: #7a8696;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mc-login-input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #15202b;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1.5px solid rgba(216, 222, 230, 0.95);
+  border-radius: 0.85rem;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    background-color 0.2s ease;
+}
+
+.mc-login-input-with-icon {
+  padding-left: 2.85rem;
+  padding-right: 1rem;
+}
+
+.mc-login-input::placeholder {
+  color: #9aa5b4;
+}
+
+.mc-login-input:hover {
+  border-color: rgba(15, 154, 168, 0.35);
+}
+
+.mc-login-input:focus {
+  outline: none;
+  border-color: rgba(15, 154, 168, 0.65);
+  box-shadow: 0 0 0 4px rgba(15, 154, 168, 0.14);
+  background: #ffffff;
+}
+
+.relative:focus-within .mc-login-field-icon {
+  color: #0f9aa8;
+}
+
+.mc-login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  background: linear-gradient(145deg, #0f9aa8 0%, #0b6f7a 100%);
+  border: none;
+  border-radius: 0.85rem;
+  box-shadow:
+    0 12px 28px -10px rgba(15, 154, 168, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.25s ease,
+    filter 0.2s ease;
+}
+
+.mc-login-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 36px -12px rgba(15, 154, 168, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  filter: brightness(1.04);
+}
+
+.mc-login-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mc-login-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@keyframes login-float {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(10px, -14px); }
+}
+
+@keyframes login-glow-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(16px, 10px) scale(1.06); }
+}
+
+@keyframes login-mesh-flow {
+  to { stroke-dashoffset: -48; }
+}
+
+@keyframes login-node-blink {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes login-corner-node-pulse {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes login-corner-halo-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+@keyframes login-ring-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.08); }
+}
+
+@keyframes login-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes login-stream-travel {
+  0% { left: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@keyframes login-hub-breathe {
+  0%, 100% { opacity: 0.6; r: 52; }
+  50% { opacity: 1; r: 58; }
+}
+
+@keyframes login-logo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes login-shine {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

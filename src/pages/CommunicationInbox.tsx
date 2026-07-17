@@ -14,6 +14,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import ConversationMessageList from '../components/inbox/ConversationMessageList'
+import ConversationListRow from '../components/inbox/ConversationListRow'
 import {
   brandApi,
   conversationsApi,
@@ -27,20 +28,6 @@ import { useAuthStore } from '../store/authStore'
 import { APP_DISPLAY_NAME } from '../config/app'
 
 type FilterKey = 'all' | 'EMAIL' | 'SMS' | 'WHATSAPP' | 'unread' | 'waiting' | 'mine' | 'archived'
-
-function formatTime(value?: string | null) {
-  if (!value) return '—'
-  try {
-    return new Date(value).toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return '—'
-  }
-}
 
 function newIdempotencyKey(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -322,12 +309,6 @@ export default function CommunicationInbox() {
     { key: 'archived', label: 'Arşiv', icon: Archive },
   ]
 
-  const channelBadge = (type: string) => {
-    if (type === 'WHATSAPP') return 'bg-signal/10 text-signal-deep'
-    if (type === 'SMS') return 'bg-dock/8 text-dock'
-    return 'bg-canvas-line/50 text-ink-soft'
-  }
-
   const channelLabel = (type: string) => {
     if (type === 'WHATSAPP') return 'WhatsApp'
     if (type === 'SMS') return 'SMS'
@@ -336,17 +317,6 @@ export default function CommunicationInbox() {
 
   const controlClass =
     'h-9 px-3 rounded-lg bg-canvas-soft text-sm text-ink border border-canvas-line/50 hover:border-canvas-line transition-colors disabled:opacity-50'
-
-  function conversationRowClass(isSelected: boolean, isUnread: boolean): string {
-    const base = 'w-full text-left px-3 py-3 transition-colors border-l-[3px]'
-    if (isSelected) {
-      return `${base} bg-signal/12 border-l-signal ring-1 ring-inset ring-signal/20`
-    }
-    if (isUnread) {
-      return `${base} border-l-signal/45 bg-white hover:bg-canvas-soft/70`
-    }
-    return `${base} border-l-transparent hover:bg-canvas-soft/55`
-  }
 
   const activeConversation = detail || selected
 
@@ -425,81 +395,21 @@ export default function CommunicationInbox() {
             {isLoading ? (
               <div className="p-3 space-y-2 animate-pulse">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-[4.5rem] bg-canvas-line/40 rounded-lg" />
+                  <div key={i} className="h-[84px] bg-canvas-line/40 rounded-lg" />
                 ))}
               </div>
             ) : conversations.length === 0 ? (
               <div className="p-8 text-center text-sm text-ink-soft">Konuşma yok</div>
             ) : (
               <ul>
-                {conversations.map((c: any) => {
-                  const unread = Number(c.unread_count || 0) > 0
-                  const isSelected = selectedId === c.id
-                  return (
-                    <li key={c.id} className="border-b border-canvas-line/40 last:border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(c.id)}
-                        className={conversationRowClass(isSelected, unread)}
-                      >
-                        <div className="flex items-start gap-2 min-w-0">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <p
-                                className={`text-[15px] truncate leading-tight ${
-                                  unread
-                                    ? 'font-semibold text-ink'
-                                    : isSelected
-                                      ? 'font-semibold text-ink'
-                                      : 'font-medium text-ink'
-                                }`}
-                              >
-                                {c.contact_display_name || c.participant_value || 'Bilinmeyen'}
-                              </p>
-                              <div className="shrink-0 flex flex-col items-end gap-1">
-                                <time className="text-xs text-ink-soft whitespace-nowrap">
-                                  {formatTime(c.last_message_at)}
-                                </time>
-                                {unread && (
-                                  <span className="min-w-[1.35rem] h-5 flex items-center justify-center text-[11px] font-semibold bg-signal text-white rounded-full px-1.5">
-                                    {c.unread_count}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <p
-                              className={`text-sm truncate ${
-                                unread ? 'font-medium text-ink' : 'text-ink-soft'
-                              }`}
-                            >
-                              {c.subject || statusLabel[c.status] || c.status}
-                            </p>
-                            <p className="text-sm text-ink-faint line-clamp-2 mt-1 leading-snug">
-                              {c.last_message_preview || '—'}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-2 min-w-0">
-                              {c.brand_name && (
-                                <span
-                                  className="text-[10px] px-1.5 py-0.5 rounded text-white truncate max-w-[6rem]"
-                                  style={{ backgroundColor: c.brand_accent_color || '#1a2332' }}
-                                >
-                                  {c.brand_name}
-                                </span>
-                              )}
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded ${channelBadge(
-                                  c.channel_type
-                                )}`}
-                              >
-                                {channelLabel(c.channel_type)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
+                {conversations.map((c: any) => (
+                  <ConversationListRow
+                    key={c.id}
+                    conversation={c}
+                    isSelected={selectedId === c.id}
+                    onSelect={setSelectedId}
+                  />
+                ))}
               </ul>
             )}
           </div>

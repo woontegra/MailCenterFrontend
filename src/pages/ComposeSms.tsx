@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, Send } from 'lucide-react'
+import { Cable, MessageSquare, Send } from 'lucide-react'
 import {
   brandApi,
+  channelConnectionApi,
   contactApi,
   senderIdentityApi,
   smsApi,
@@ -39,9 +40,20 @@ export default function ComposeSms() {
     },
   })
 
+  const { data: smsConnections = [], isLoading: connectionsLoading } = useQuery({
+    queryKey: ['channel-connections', 'SMS'],
+    queryFn: async () => {
+      const res = await channelConnectionApi.list({ channel_type: 'SMS' })
+      const rows = Array.isArray(res.data) ? res.data : []
+      return rows.filter((c: any) => c.status === 'ACTIVE')
+    },
+  })
+
+  const hasActiveSmsChannel = smsConnections.length > 0
+
   const { data: senders = [] } = useQuery({
     queryKey: ['sender-identities-sms', brandId],
-    enabled: Boolean(brandId),
+    enabled: Boolean(brandId) && hasActiveSmsChannel,
     queryFn: async () => {
       const res = await senderIdentityApi.list({
         brand_id: brandId,
@@ -202,6 +214,23 @@ export default function ComposeSms() {
         </div>
       )}
 
+      {!connectionsLoading && !hasActiveSmsChannel ? (
+        <div className="mc-panel mc-panel-asymmetric p-10 text-center max-w-lg mx-auto">
+          <MessageSquare className="w-10 h-10 text-ink-faint mx-auto mb-3" />
+          <p className="text-ink font-medium text-lg">Henüz aktif bir SMS kanalınız bulunmuyor.</p>
+          <p className="text-sm text-ink-soft mt-2 mb-5">
+            Gönderim yapmadan önce Kanal Bağlantıları üzerinden SMS kanalını bağlayın.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/channels/sms/setup')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-signal text-white text-sm font-medium"
+          >
+            <Cable className="w-4 h-4" />
+            SMS Kanalını Bağla
+          </button>
+        </div>
+      ) : (
       <form onSubmit={onSubmit} className="grid gap-4 lg:grid-cols-[1fr_18rem]">
         <div className="mc-panel mc-panel-asymmetric p-5 space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
@@ -359,6 +388,7 @@ export default function ComposeSms() {
           </div>
         </aside>
       </form>
+      )}
     </div>
   )
 }

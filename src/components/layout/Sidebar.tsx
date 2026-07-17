@@ -92,9 +92,9 @@ const navCategories: NavCategory[] = [
     defaultOpen: true,
     items: [
       { to: '/brands', icon: Building2, label: 'Markalar' },
-      { to: '/accounts', icon: Mail, label: 'Hesaplar' },
-      { to: '/channels', icon: Cable, label: 'Kanallar' },
-      { to: '/sender-identities', icon: BadgeCheck, label: 'Gönderen Kimlikleri' },
+      { to: '/accounts', icon: Mail, label: 'E-posta Hesapları' },
+      { to: '/channels', icon: Cable, label: 'Kanal Bağlantıları' },
+      { to: '/sender-identities', icon: BadgeCheck, label: 'Gönderim Kimlikleri' },
       { to: '/deliverability', icon: ShieldCheck, label: 'Teslimat Sağlığı' },
     ],
   },

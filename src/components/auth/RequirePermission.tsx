@@ -11,6 +11,7 @@ export function RequirePermission({
 }) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   if (!hasPermission(permission)) {
+    // Explicit forbidden UI — never silently redirect to home
     return <Forbidden />
   }
   return <>{children}</>
