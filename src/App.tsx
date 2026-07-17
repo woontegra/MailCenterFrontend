@@ -14,6 +14,7 @@ import Brands from './pages/Brands'
 import Channels from './pages/Channels'
 import SenderIdentities from './pages/SenderIdentities'
 import Templates from './pages/Templates'
+import TemplateEditorPage from './pages/TemplateEditor'
 import Compose from './pages/Compose'
 import ComposeSms from './pages/ComposeSms'
 import ComposeWhatsApp from './pages/ComposeWhatsApp'
@@ -21,6 +22,7 @@ import WhatsAppInbox from './pages/WhatsAppInbox'
 import Drafts from './pages/Drafts'
 import Deliverability from './pages/Deliverability'
 import OutboundCenter from './pages/OutboundCenter'
+import CampaignWizard from './pages/CampaignWizard'
 import Contacts from './pages/Contacts'
 import Team from './pages/Team'
 import BillingUsage from './pages/BillingUsage'
@@ -127,6 +129,22 @@ function App() {
             }
           />
           <Route
+            path="outbound/campaigns/new"
+            element={
+              <RequirePermission permission="EMAIL_SEND">
+                <CampaignWizard />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="outbound/campaigns/:id/edit"
+            element={
+              <RequirePermission permission="EMAIL_SEND">
+                <CampaignWizard />
+              </RequirePermission>
+            }
+          />
+          <Route
             path="contacts"
             element={
               <RequirePermission permission="CONTACT_VIEW">
@@ -141,6 +159,22 @@ function App() {
             element={
               <RequirePermission permission="TEMPLATE_VIEW">
                 <Templates />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="templates/new"
+            element={
+              <RequirePermission permission="TEMPLATE_VIEW">
+                <TemplateEditorPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="templates/:id/edit"
+            element={
+              <RequirePermission permission="TEMPLATE_VIEW">
+                <TemplateEditorPage />
               </RequirePermission>
             }
           />

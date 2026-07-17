@@ -2,14 +2,18 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Archive,
+  ChevronDown,
+  ChevronUp,
   Inbox,
   Mail,
   MessageCircle,
   MessageSquare,
+  Reply,
   Search,
   Send,
   UserRound,
 } from 'lucide-react'
+import ConversationMessageList from '../components/inbox/ConversationMessageList'
 import {
   brandApi,
   conversationsApi,
@@ -78,6 +82,9 @@ export default function CommunicationInbox() {
   const [templateId, setTemplateId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [composerExpanded, setComposerExpanded] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const idempotencyRef = useRef(newIdempotencyKey('inbox'))
 
   const listParams = useMemo(() => {
@@ -170,6 +177,11 @@ export default function CommunicationInbox() {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     })
   }, [selectedId, queryClient])
+
+  useEffect(() => {
+    setComposerOpen(false)
+    setComposerExpanded(false)
+  }, [selectedId])
 
   useEffect(() => {
     if (detail?.subject) setReplySubject(detail.subject.startsWith('Re:') ? detail.subject : `Re: ${detail.subject}`)
@@ -311,24 +323,46 @@ export default function CommunicationInbox() {
   ]
 
   const channelBadge = (type: string) => {
-    if (type === 'WHATSAPP') return 'bg-signal/15 text-signal-deep'
-    if (type === 'SMS') return 'bg-dock/10 text-dock'
-    return 'bg-canvas-line/60 text-ink-soft'
+    if (type === 'WHATSAPP') return 'bg-signal/10 text-signal-deep'
+    if (type === 'SMS') return 'bg-dock/8 text-dock'
+    return 'bg-canvas-line/50 text-ink-soft'
   }
 
+  const channelLabel = (type: string) => {
+    if (type === 'WHATSAPP') return 'WhatsApp'
+    if (type === 'SMS') return 'SMS'
+    return 'E-posta'
+  }
+
+  const controlClass =
+    'h-9 px-3 rounded-lg bg-canvas-soft text-sm text-ink border border-canvas-line/50 hover:border-canvas-line transition-colors disabled:opacity-50'
+
+  function conversationRowClass(isSelected: boolean, isUnread: boolean): string {
+    const base = 'w-full text-left px-3 py-3 transition-colors border-l-[3px]'
+    if (isSelected) {
+      return `${base} bg-signal/12 border-l-signal ring-1 ring-inset ring-signal/20`
+    }
+    if (isUnread) {
+      return `${base} border-l-signal/45 bg-white hover:bg-canvas-soft/70`
+    }
+    return `${base} border-l-transparent hover:bg-canvas-soft/55`
+  }
+
+  const activeConversation = detail || selected
+
   return (
-    <div className="mc-shell pt-1 pb-4 h-[calc(100vh-4rem)] flex flex-col min-h-0">
-      <div className="mb-4 shrink-0">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">Birleşik</p>
-        <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">İletişim Kutusu</h1>
-        <p className="text-sm text-ink-soft mt-1">
+    <div className="mc-shell pt-1 pb-3 h-[calc(100vh-4rem)] flex flex-col min-h-0 overflow-hidden">
+      <div className="mb-3 shrink-0">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-signal-deep mb-0.5">Birleşik</p>
+        <h1 className="font-display text-xl lg:text-2xl font-semibold text-ink">İletişim Kutusu</h1>
+        <p className="text-xs text-ink-soft mt-0.5">
           {APP_DISPLAY_NAME} e-posta, SMS ve WhatsApp konuşmalarını tek çalışma alanında birleştirir.
         </p>
       </div>
 
       {(error || notice) && (
         <div
-          className={`mb-3 p-3 rounded-xl text-sm shrink-0 ${
+          className={`mb-2 p-2.5 rounded-xl text-sm shrink-0 ${
             error
               ? 'bg-red-50 border border-red-200 text-red-600'
               : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
@@ -338,30 +372,30 @@ export default function CommunicationInbox() {
         </div>
       )}
 
-      <div className="flex flex-col xl:flex-row gap-3 min-h-0 flex-1">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(170px,190px)_minmax(340px,400px)_minmax(0,1fr)] gap-3 min-h-0 flex-1">
         {/* Left filters */}
-        <aside className="mc-panel mc-panel-asymmetric w-full xl:w-56 shrink-0 p-3 overflow-y-auto">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint mb-2 px-1">Kanallar</p>
-          <div className="space-y-1">
+        <aside className="mc-panel mc-panel-asymmetric w-full shrink-0 p-2.5 overflow-y-auto min-h-0 xl:max-h-full">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-ink-faint mb-1.5 px-1">Kanallar</p>
+          <div className="space-y-0.5">
             {filters.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setFilter(key)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors ${
                   filter === key
-                    ? 'bg-dock text-white'
+                    ? 'bg-dock text-white font-medium'
                     : 'text-ink-soft hover:bg-canvas-soft'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 shrink-0" />
-                {label}
+                <span className="truncate">{label}</span>
               </button>
             ))}
           </div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint mt-4 mb-2 px-1">Marka</p>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-ink-faint mt-3 mb-1.5 px-1">Marka</p>
           <select
-            className="w-full px-3 py-2 rounded-xl bg-canvas-soft text-sm"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-canvas-soft text-[13px] border border-canvas-line/50"
             value={brandFilter}
             onChange={(e) => setBrandFilter(e.target.value)}
           >
@@ -375,99 +409,147 @@ export default function CommunicationInbox() {
         </aside>
 
         {/* Middle list */}
-        <section className="mc-panel mc-panel-asymmetric w-full xl:w-[22rem] shrink-0 overflow-hidden flex flex-col">
-          <div className="p-3 border-b border-canvas-line">
+        <section className="mc-panel mc-panel-asymmetric w-full shrink-0 overflow-hidden flex flex-col min-h-0 xl:max-h-full">
+          <div className="p-2.5 border-b border-canvas-line shrink-0 bg-white/60">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-canvas-soft text-sm"
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-canvas-soft text-sm border border-transparent focus:border-canvas-line"
                 placeholder="Ara…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {isLoading ? (
-              <div className="p-4 space-y-2 animate-pulse">
+              <div className="p-3 space-y-2 animate-pulse">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-16 bg-canvas-line/40 rounded-lg" />
+                  <div key={i} className="h-[4.5rem] bg-canvas-line/40 rounded-lg" />
                 ))}
               </div>
             ) : conversations.length === 0 ? (
               <div className="p-8 text-center text-sm text-ink-soft">Konuşma yok</div>
             ) : (
-              <ul className="divide-y divide-canvas-line/70">
-                {conversations.map((c: any) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(c.id)}
-                      className={`w-full text-left px-4 py-3 transition-colors ${
-                        selectedId === c.id ? 'bg-signal/10' : 'hover:bg-canvas-soft/80'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        {c.brand_name && (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded-md text-white truncate max-w-[6rem]"
-                            style={{ backgroundColor: c.brand_accent_color || '#1a2332' }}
-                          >
-                            {c.brand_name}
-                          </span>
-                        )}
-                        <span
-                          className={`text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-md ${channelBadge(
-                            c.channel_type
-                          )}`}
-                        >
-                          {c.channel_type}
-                        </span>
-                        {c.unread_count > 0 && (
-                          <span className="ml-auto text-[10px] font-medium bg-signal text-white rounded-full px-1.5 py-0.5">
-                            {c.unread_count}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-ink truncate">
-                        {c.contact_display_name || c.participant_value || 'Bilinmeyen'}
-                      </p>
-                      <p className="text-xs text-ink-soft truncate mt-0.5">
-                        {c.subject || statusLabel[c.status] || c.status}
-                      </p>
-                      <p className="text-[11px] text-ink-faint mt-1">{formatTime(c.last_message_at)}</p>
-                    </button>
-                  </li>
-                ))}
+              <ul>
+                {conversations.map((c: any) => {
+                  const unread = Number(c.unread_count || 0) > 0
+                  const isSelected = selectedId === c.id
+                  return (
+                    <li key={c.id} className="border-b border-canvas-line/40 last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(c.id)}
+                        className={conversationRowClass(isSelected, unread)}
+                      >
+                        <div className="flex items-start gap-2 min-w-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p
+                                className={`text-[15px] truncate leading-tight ${
+                                  unread
+                                    ? 'font-semibold text-ink'
+                                    : isSelected
+                                      ? 'font-semibold text-ink'
+                                      : 'font-medium text-ink'
+                                }`}
+                              >
+                                {c.contact_display_name || c.participant_value || 'Bilinmeyen'}
+                              </p>
+                              <div className="shrink-0 flex flex-col items-end gap-1">
+                                <time className="text-xs text-ink-soft whitespace-nowrap">
+                                  {formatTime(c.last_message_at)}
+                                </time>
+                                {unread && (
+                                  <span className="min-w-[1.35rem] h-5 flex items-center justify-center text-[11px] font-semibold bg-signal text-white rounded-full px-1.5">
+                                    {c.unread_count}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p
+                              className={`text-sm truncate ${
+                                unread ? 'font-medium text-ink' : 'text-ink-soft'
+                              }`}
+                            >
+                              {c.subject || statusLabel[c.status] || c.status}
+                            </p>
+                            <p className="text-sm text-ink-faint line-clamp-2 mt-1 leading-snug">
+                              {c.last_message_preview || '—'}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-2 min-w-0">
+                              {c.brand_name && (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded text-white truncate max-w-[6rem]"
+                                  style={{ backgroundColor: c.brand_accent_color || '#1a2332' }}
+                                >
+                                  {c.brand_name}
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded ${channelBadge(
+                                  c.channel_type
+                                )}`}
+                              >
+                                {channelLabel(c.channel_type)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
         </section>
 
         {/* Right detail */}
-        <section className="mc-panel mc-panel-asymmetric flex-1 min-w-0 overflow-hidden flex flex-col">
-          {!detail ? (
-            <div className="flex-1 flex items-center justify-center text-ink-soft text-sm p-8">
-              Bir konuşma seçin
+        <section className="mc-panel mc-panel-asymmetric flex-1 min-w-0 overflow-hidden flex flex-col min-h-0 xl:max-h-full">
+          {!selectedId || !activeConversation ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-ink-soft text-sm p-8">
+              <Inbox className="w-10 h-10 text-ink-faint/40 mb-3" />
+              <p>Bir konuşma seçin</p>
             </div>
           ) : (
             <>
-              <header className="p-4 border-b border-canvas-line shrink-0 space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h2 className="font-display text-lg text-ink truncate">
-                      {detail.contact_display_name || detail.participant_value}
+              <header className="px-5 py-3.5 border-b border-canvas-line shrink-0 bg-white/80">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-xl lg:text-2xl font-semibold text-ink truncate">
+                      {activeConversation.contact_display_name || activeConversation.participant_value}
                     </h2>
-                    <p className="text-xs text-ink-soft mt-0.5 truncate">
-                      {detail.subject || 'Konu yok'} · {detail.channel_type}
-                      {detail.brand_name ? ` · ${detail.brand_name}` : ''}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-sm text-ink-soft">
+                      <span className="truncate">{activeConversation.participant_value}</span>
+                      <span className="text-ink-faint">·</span>
+                      <span>{channelLabel(activeConversation.channel_type)}</span>
+                      {activeConversation.brand_name && (
+                        <>
+                          <span className="text-ink-faint">·</span>
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-white"
+                            style={{
+                              backgroundColor: activeConversation.brand_accent_color || '#1a2332',
+                            }}
+                          >
+                            {activeConversation.brand_name}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {activeConversation.subject && (
+                      <p className="text-sm text-ink-soft mt-1.5 truncate font-medium">
+                        {activeConversation.subject}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                     <select
-                      className="px-2 py-1.5 rounded-lg bg-canvas-soft text-xs"
-                      value={detail.status}
+                      className={controlClass}
+                      value={activeConversation.status}
                       onChange={(e) => statusMutation.mutate(e.target.value)}
+                      disabled={!detail}
                     >
                       {Object.entries(statusLabel).map(([k, v]) => (
                         <option key={k} value={k}>
@@ -476,9 +558,10 @@ export default function CommunicationInbox() {
                       ))}
                     </select>
                     <select
-                      className="px-2 py-1.5 rounded-lg bg-canvas-soft text-xs"
-                      value={detail.priority}
+                      className={controlClass}
+                      value={activeConversation.priority}
                       onChange={(e) => priorityMutation.mutate(e.target.value)}
+                      disabled={!detail}
                     >
                       {Object.entries(priorityLabel).map(([k, v]) => (
                         <option key={k} value={k}>
@@ -488,19 +571,20 @@ export default function CommunicationInbox() {
                     </select>
                     <button
                       type="button"
-                      className="px-2 py-1.5 rounded-lg bg-canvas-soft text-xs"
-                      disabled={!canAssign}
+                      className={controlClass}
+                      disabled={!canAssign || !detail}
                       onClick={() =>
                         assignMutation.mutate(
-                          detail.assigned_user_id === user?.id ? null : user?.id || null
+                          activeConversation.assigned_user_id === user?.id ? null : user?.id || null
                         )
                       }
                     >
-                      {detail.assigned_user_id === user?.id ? 'Atamayı kaldır' : 'Bana ata'}
+                      {activeConversation.assigned_user_id === user?.id ? 'Atamayı kaldır' : 'Bana ata'}
                     </button>
                     <button
                       type="button"
-                      className="px-2 py-1.5 rounded-lg bg-dock text-white text-xs"
+                      className={`${controlClass} bg-dock text-white hover:border-dock`}
+                      disabled={!detail}
                       onClick={() => archiveMutation.mutate()}
                     >
                       Arşivle
@@ -509,62 +593,40 @@ export default function CommunicationInbox() {
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-transparent to-canvas-soft/40">
-                {messages.map((m: any) => {
-                  const outbound = m.direction === 'OUTBOUND'
-                  return (
-                    <div
-                      key={m.sourceId}
-                      className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm animate-[fadeIn_0.25s_ease] ${
-                          outbound
-                            ? 'bg-dock text-white rounded-br-md'
-                            : 'bg-white border border-canvas-line text-ink rounded-bl-md'
-                        }`}
-                      >
-                        {m.subject && (
-                          <p className={`text-[11px] mb-1 ${outbound ? 'text-white/70' : 'text-ink-faint'}`}>
-                            {m.subject}
-                          </p>
-                        )}
-                        <p className="whitespace-pre-wrap break-words">
-                          {m.content || '(İçerik yok)'}
-                        </p>
-                        <div
-                          className={`flex flex-wrap gap-2 mt-1.5 text-[10px] ${
-                            outbound ? 'text-white/60' : 'text-ink-faint'
-                          }`}
-                        >
-                          <span>{formatTime(m.sentAt || m.receivedAt)}</span>
-                          {m.status && <span>{m.status}</span>}
-                          {m.providerMessageId && (
-                            <span className="truncate max-w-[8rem]">{m.providerMessageId}</span>
-                          )}
-                          {m.safeErrorMessage && (
-                            <span className="text-red-300">{m.safeErrorMessage}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="flex-1 overflow-y-auto min-h-0 px-5 pt-3 pb-4 bg-canvas-soft/20">
+                <ConversationMessageList messages={messages} channelType={channelType} />
               </div>
 
-              <div className="border-t border-canvas-line p-3 shrink-0 space-y-3 bg-white/80">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-ink-faint mb-1">İç notlar</p>
-                  <div className="max-h-20 overflow-y-auto space-y-1 mb-2">
-                    {notes.map((n: any) => (
-                      <p key={n.id} className="text-xs text-ink-soft">
-                        <span className="text-ink-faint">{n.user_name || n.user_email}: </span>
-                        {n.content}
-                      </p>
-                    ))}
-                  </div>
+              <div className="border-t border-canvas-line px-4 py-2.5 shrink-0 bg-white/95 space-y-2">
+                <div className="rounded-lg border border-canvas-line/80 bg-canvas-soft/30">
+                  <button
+                    type="button"
+                    onClick={() => setNotesOpen((v) => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left"
+                  >
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                      İç notlar {notes.length > 0 ? `(${notes.length})` : ''}
+                    </span>
+                    {notesOpen ? (
+                      <ChevronUp className="w-3.5 h-3.5 text-ink-faint" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-ink-faint" />
+                    )}
+                  </button>
+                  {notesOpen && notes.length > 0 && (
+                    <div className="max-h-24 overflow-y-auto px-3 pb-2 space-y-1 border-t border-canvas-line/60">
+                      {notes.map((n: any) => (
+                        <p key={n.id} className="text-xs text-ink-soft leading-snug">
+                          <span className="text-ink-faint font-medium">
+                            {n.user_name || n.user_email}:{' '}
+                          </span>
+                          {n.content}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   <form
-                    className="flex gap-2"
+                    className="flex gap-2 px-3 pb-2.5"
                     onSubmit={(e) => {
                       e.preventDefault()
                       if (!canNote) return
@@ -572,7 +634,7 @@ export default function CommunicationInbox() {
                     }}
                   >
                     <input
-                      className="flex-1 px-3 py-2 rounded-xl bg-canvas-soft text-xs"
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-white text-xs border border-canvas-line/60"
                       placeholder="Yalnızca ekibe görünür not…"
                       value={noteText}
                       disabled={!canNote}
@@ -581,7 +643,7 @@ export default function CommunicationInbox() {
                     <button
                       type="submit"
                       disabled={!canNote}
-                      className="px-3 py-2 rounded-xl bg-canvas-line text-xs disabled:opacity-50"
+                      className="px-2.5 py-1.5 rounded-lg bg-canvas-line text-xs disabled:opacity-50 shrink-0"
                     >
                       Not
                     </button>
@@ -592,80 +654,127 @@ export default function CommunicationInbox() {
                 ((channelType === 'EMAIL' && canSendEmail) ||
                   (channelType === 'SMS' && canSendSms) ||
                   (channelType === 'WHATSAPP' && canSendWa)) ? (
-                <form onSubmit={onSendReply} className="space-y-2">
-                  <select
-                    className="w-full px-3 py-2 rounded-xl bg-canvas-soft text-sm"
-                    value={senderIdentityId}
-                    onChange={(e) => setSenderIdentityId(e.target.value)}
-                    required
-                  >
-                    <option value="">Gönderen kimliği</option>
-                    {senders.map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.display_name} · {s.sender_value}
-                      </option>
-                    ))}
-                  </select>
-
-                  {channelType === 'EMAIL' && (
-                    <input
-                      className="w-full px-3 py-2 rounded-xl bg-canvas-soft text-sm"
-                      placeholder="Konu"
-                      value={replySubject}
-                      onChange={(e) => setReplySubject(e.target.value)}
-                    />
-                  )}
-
-                  {channelType === 'WHATSAPP' && (
-                    <div className="flex gap-2">
-                      <select
-                        className="flex-1 px-3 py-2 rounded-xl bg-canvas-soft text-sm"
-                        value={waMode}
-                        onChange={(e) => setWaMode(e.target.value as 'TEMPLATE' | 'TEXT')}
-                      >
-                        <option value="TEMPLATE">Onaylı şablon</option>
-                        <option value="TEXT">Serbest metin</option>
-                      </select>
-                      {waMode === 'TEMPLATE' && (
-                        <select
-                          className="flex-1 px-3 py-2 rounded-xl bg-canvas-soft text-sm"
-                          value={templateId}
-                          onChange={(e) => setTemplateId(e.target.value)}
+                  composerOpen ? (
+                    <div className="rounded-lg border border-canvas-line/80 bg-white">
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-canvas-line/60">
+                        <span className="text-sm font-medium text-ink">Yanıt</span>
+                        <button
+                          type="button"
+                          onClick={() => setComposerOpen(false)}
+                          className="text-xs text-ink-soft hover:text-ink px-2 py-1 rounded-md hover:bg-canvas-soft transition-colors"
                         >
-                          <option value="">Şablon seçin</option>
-                          {waTemplates.map((t: any) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                          Kapat
+                        </button>
+                      </div>
+                      <form onSubmit={onSendReply} className="p-3 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <select
+                            className="w-full px-3 py-2 rounded-lg bg-canvas-soft text-sm border border-canvas-line/50"
+                            value={senderIdentityId}
+                            onChange={(e) => setSenderIdentityId(e.target.value)}
+                            required
+                          >
+                            <option value="">Gönderen kimliği</option>
+                            {senders.map((s: any) => (
+                              <option key={s.id} value={s.id}>
+                                {s.display_name} · {s.sender_value}
+                              </option>
+                            ))}
+                          </select>
+
+                          {channelType === 'EMAIL' && (
+                            <input
+                              className="w-full px-3 py-2 rounded-lg bg-canvas-soft text-sm border border-canvas-line/50"
+                              placeholder="Konu"
+                              value={replySubject}
+                              onChange={(e) => setReplySubject(e.target.value)}
+                            />
+                          )}
+                        </div>
+
+                        {channelType === 'WHATSAPP' && (
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              className="flex-1 min-w-[8rem] px-3 py-2 rounded-lg bg-canvas-soft text-sm border border-canvas-line/50"
+                              value={waMode}
+                              onChange={(e) => setWaMode(e.target.value as 'TEMPLATE' | 'TEXT')}
+                            >
+                              <option value="TEMPLATE">Onaylı şablon</option>
+                              <option value="TEXT">Serbest metin</option>
+                            </select>
+                            {waMode === 'TEMPLATE' && (
+                              <select
+                                className="flex-1 min-w-[8rem] px-3 py-2 rounded-lg bg-canvas-soft text-sm border border-canvas-line/50"
+                                value={templateId}
+                                onChange={(e) => setTemplateId(e.target.value)}
+                              >
+                                <option value="">Şablon seçin</option>
+                                {waTemplates.map((t: any) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        )}
+
+                        {(channelType !== 'WHATSAPP' || waMode === 'TEXT') && (
+                          <div>
+                            <textarea
+                              className={`w-full px-3 py-2.5 rounded-lg bg-canvas-soft text-[15px] border border-canvas-line/50 resize-y leading-relaxed transition-[min-height] ${
+                                composerExpanded
+                                  ? 'min-h-[180px] max-h-[320px]'
+                                  : 'min-h-[96px] max-h-[140px]'
+                              }`}
+                              placeholder={
+                                channelType === 'SMS'
+                                  ? 'SMS yanıtı (OPTED_IN gerekli)…'
+                                  : 'Yanıt yazın…'
+                              }
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                            />
+                            <div className="flex justify-end mt-1">
+                              <button
+                                type="button"
+                                onClick={() => setComposerExpanded((v) => !v)}
+                                className="text-xs text-ink-soft hover:text-ink px-1"
+                              >
+                                {composerExpanded ? 'Daralt' : 'Genişlet'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-signal text-white text-sm font-medium hover:bg-signal-deep transition-colors"
+                          >
+                            <Send className="w-4 h-4" />
+                            Kuyruğa al
+                          </button>
+                        </div>
+                      </form>
                     </div>
-                  )}
-
-                  {(channelType !== 'WHATSAPP' || waMode === 'TEXT') && (
-                    <textarea
-                      className="w-full px-3 py-2 rounded-xl bg-canvas-soft text-sm min-h-[72px]"
-                      placeholder={
-                        channelType === 'SMS'
-                          ? 'SMS yanıtı (OPTED_IN gerekli)…'
-                          : 'Yanıt yazın…'
-                      }
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                    />
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-signal text-white text-sm hover:bg-signal-deep transition-colors"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Kuyruğa al
-                  </button>
-                </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setComposerOpen(true)}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 rounded-lg border border-canvas-line/80 bg-canvas-soft/40 hover:bg-canvas-soft/70 transition-colors text-left"
+                    >
+                      <Reply className="w-4 h-4 text-signal shrink-0" />
+                      <span className="text-sm font-medium text-ink">Yanıtla</span>
+                      {replyText.trim() && (
+                        <span className="ml-auto text-xs text-ink-soft truncate max-w-[50%]">
+                          Taslak kaydedildi
+                        </span>
+                      )}
+                    </button>
+                  )
                 ) : (
-                  <p className="text-xs text-ink-faint">
+                  <p className="text-sm text-ink-soft">
                     Bu konuşmaya yanıt gönderme yetkiniz yok (görüntüleme modu).
                   </p>
                 )}

@@ -206,7 +206,60 @@ export const templateApi = {
   create: (data: any) => api.post('/templates', data),
   update: (id: number, data: any) => api.patch(`/templates/${id}`, data),
   remove: (id: number) => api.delete(`/templates/${id}`),
+  duplicate: (id: number) => api.post(`/templates/${id}/duplicate`),
+  compile: (data: any) => api.post('/templates/compile', data),
   render: (data: any) => api.post('/templates/render', data),
+}
+
+export const templateMediaApi = {
+  upload: (file: File, brandId?: number) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (brandId != null && Number.isFinite(brandId)) {
+      form.append('brand_id', String(brandId))
+    }
+    return api.post('/templates/media/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
+export const campaignApi = {
+  list: (params?: any) => api.get('/campaigns', { params }),
+  get: (id: number) => api.get(`/campaigns/${id}`),
+  create: (data: any) => api.post('/campaigns', data),
+  update: (id: number, data: any) => api.patch(`/campaigns/${id}`, data),
+  duplicate: (id: number) => api.post(`/campaigns/${id}/duplicate`),
+  previewAudience: (data: any) => api.post('/campaigns/preview-audience', data),
+  validate: (id: number) => api.post(`/campaigns/${id}/validate`),
+  testSend: (id: number, data: any) => api.post(`/campaigns/${id}/test-send`, data),
+  launch: (id: number, data: any) => api.post(`/campaigns/${id}/launch`, data),
+  pause: (id: number) => api.post(`/campaigns/${id}/pause`),
+  resume: (id: number) => api.post(`/campaigns/${id}/resume`),
+  cancel: (id: number) => api.post(`/campaigns/${id}/cancel`),
+  recipients: (id: number, params?: any) => api.get(`/campaigns/${id}/recipients`, { params }),
+  previewImport: (id: number, formData: FormData) =>
+    api.post(`/campaigns/${id}/imports/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  applyImport: (id: number, importId: number, data: any) =>
+    api.post(`/campaigns/${id}/imports/${importId}/apply`, data),
+}
+
+export const segmentApi = {
+  list: () => api.get('/segments'),
+  get: (id: number) => api.get(`/segments/${id}`),
+  create: (data: any) => api.post('/segments', data),
+  update: (id: number, data: any) => api.patch(`/segments/${id}`, data),
+  duplicate: (id: number) => api.post(`/segments/${id}/duplicate`),
+  preview: (id: number) => api.post(`/segments/${id}/preview`),
+  remove: (id: number) => api.delete(`/segments/${id}`),
+}
+
+export const suppressionApi = {
+  list: (params?: any) => api.get('/suppressions', { params }),
+  create: (data: any) => api.post('/suppressions', data),
+  remove: (id: number) => api.delete(`/suppressions/${id}`),
 }
 
 export const contactApi = {
