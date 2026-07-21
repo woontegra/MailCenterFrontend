@@ -133,11 +133,6 @@ export default function Channels() {
         const s = String(a.imap_idle_status || '').toUpperCase()
         return s === 'LISTENING' || s === 'IDLE' || s === 'ACTIVE'
       })
-      const approvedTemplates = waTemplates.filter(
-        (t: any) =>
-          Number(t.brand_id) === Number(brand.id) &&
-          String(t.provider_approval_status || '').toUpperCase() === 'APPROVED'
-      ).length
 
       return {
         brand,
@@ -161,8 +156,18 @@ export default function Channels() {
         whatsapp: {
           connection: waConn,
           phone: waConn?.settings?.business_phone_number || null,
-          webhookConfigured: Boolean(waConn?.has_credentials),
-          approvedTemplates,
+          verifiedName: waConn?.settings?.verified_name || waConn?.display_name || null,
+          wabaName: waConn?.settings?.waba_name || null,
+          webhookStatus: waConn?.settings?.webhook_status || null,
+          approvedTemplates:
+            waConn?.settings?.approved_template_count ??
+            waTemplates.filter(
+              (t: any) =>
+                Number(t.brand_id) === Number(brand.id) &&
+                String(t.provider_approval_status || '').toUpperCase() === 'APPROVED'
+            ).length,
+          lastInbound: waConn?.settings?.last_inbound_at || null,
+          lastOutbound: waConn?.settings?.last_outbound_at || null,
           lastTest: waConn?.last_tested_at || null,
         },
       }
@@ -334,22 +339,39 @@ export default function Channels() {
                   </div>
                   <ul className="text-sm text-ink-soft space-y-1.5 flex-1">
                     <li>
+                      İşletme:{' '}
+                      <span className="text-ink font-medium">
+                        {whatsapp.verifiedName || whatsapp.wabaName || '—'}
+                      </span>
+                    </li>
+                    <li>
                       Telefon:{' '}
                       <span className="text-ink font-medium">{whatsapp.phone || '—'}</span>
                     </li>
                     <li>
                       Webhook:{' '}
                       <span className="text-ink font-medium">
-                        {whatsapp.connection?.status === 'ACTIVE'
-                          ? 'Yapılandırıldı'
-                          : whatsapp.connection
+                        {whatsapp.webhookStatus ||
+                          (whatsapp.connection?.status === 'ACTIVE'
                             ? 'Kontrol edilmeli'
-                            : 'Bağlı değil'}
+                            : 'Bağlı değil')}
                       </span>
                     </li>
                     <li>
                       Onaylı şablon:{' '}
                       <span className="text-ink font-medium">{whatsapp.approvedTemplates}</span>
+                    </li>
+                    <li>
+                      Son gelen:{' '}
+                      <span className="text-ink font-medium">
+                        {formatTime(whatsapp.lastInbound)}
+                      </span>
+                    </li>
+                    <li>
+                      Son gönderim:{' '}
+                      <span className="text-ink font-medium">
+                        {formatTime(whatsapp.lastOutbound || whatsapp.lastTest)}
+                      </span>
                     </li>
                   </ul>
                   <Link
@@ -357,7 +379,7 @@ export default function Channels() {
                     className="mt-4 w-full py-2.5 rounded-xl bg-dock text-white text-sm font-medium hover:bg-dock-raised transition-colors text-center block"
                   >
                     {whatsapp.connection
-                      ? 'WhatsApp kanalını düzenle'
+                      ? 'Bağlantıyı yönet'
                       : 'WhatsApp kanalını bağla'}
                   </Link>
                 </article>

@@ -105,6 +105,21 @@ export const channelConnectionApi = {
   update: (id: number, data: any) => api.patch(`/channel-connections/${id}`, data),
   remove: (id: number) => api.delete(`/channel-connections/${id}`),
   test: (id: number) => api.post(`/channel-connections/${id}/test`),
+  metaSetupStatus: () => api.get('/channel-connections/whatsapp/meta-setup-status'),
+  completeEmbeddedSignup: (data: {
+    brandId: number
+    authorizationCode: string
+    sessionInfo?: Record<string, unknown> | null
+  }) => api.post('/channel-connections/whatsapp/embedded-signup/complete', data),
+  syncWhatsAppTemplates: (id: number) =>
+    api.post(`/channel-connections/${id}/whatsapp/sync-templates`),
+  verifyWhatsApp: (id: number) => api.post(`/channel-connections/${id}/whatsapp/verify`),
+  disconnectWhatsApp: (id: number) =>
+    api.post(`/channel-connections/${id}/whatsapp/disconnect`),
+  testWhatsAppTemplate: (
+    id: number,
+    data: { to: string; templateName: string; language?: string; components?: unknown[] }
+  ) => api.post(`/channel-connections/${id}/whatsapp/test-template`, data),
 }
 
 export const smsApi = {

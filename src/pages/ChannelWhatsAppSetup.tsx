@@ -1,16 +1,63 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle2, Copy, FlaskConical, Loader2, Save } from 'lucide-react'
-import { brandApi, channelConnectionApi } from '../services/api'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  FlaskConical,
+  Loader2,
+  RefreshCw,
+  Save,
+  Unplug,
+} from 'lucide-react'
+import { brandApi, channelConnectionApi, templateApi } from '../services/api'
 import { channelSetupApiError } from '../utils/channelSetupErrors'
 
-const STEPS = ['Marka', 'Sağlayıcı', 'Hesap bilgileri', 'Test ve kaydet'] as const
+declare global {
+  interface Window {
+    FB?: any
+    fbAsyncInit?: () => void
+  }
+}
 
-function webhookUrl() {
-  const api = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-  const base = String(api).replace(/\/api\/?$/, '')
-  return `${base}/api/webhooks/whatsapp/meta`
+const META_APP_ID = String(import.meta.env.VITE_META_APP_ID || '').trim()
+const META_CONFIG_ID = String(import.meta.env.VITE_META_WHATSAPP_CONFIG_ID || '').trim()
+
+function loadFacebookSdk(appId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.FB) {
+      resolve()
+      return
+    }
+    window.fbAsyncInit = () => {
+      try {
+        window.FB.init({
+          appId,
+          cookie: true,
+          xfbml: false,
+          version: String(import.meta.env.VITE_META_GRAPH_API_VERSION || 'v23.0').replace(
+            /^\/+/,
+            ''
+          ),
+        })
+        resolve()
+      } catch (err) {
+        reject(err)
+      }
+    }
+    if (document.getElementById('facebook-jssdk')) {
+      return
+    }
+    const script = document.createElement('script')
+    script.id = 'facebook-jssdk'
+    script.async = true
+    script.src = 'https://connect.facebook.net/en_US/sdk.js'
+    script.onerror = () => reject(new Error('Facebook SDK yüklenemedi'))
+    document.body.appendChild(script)
+  })
 }
 
 export default function ChannelWhatsAppSetup() {
@@ -18,17 +65,21 @@ export default function ChannelWhatsAppSetup() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const presetBrandId = searchParams.get('brandId') || ''
-  const hookUrl = webhookUrl()
 
-  const [step, setStep] = useState(0)
+  const [brandId, setBrandId] = useState(presetBrandId)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
-  const [testing, setTesting] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState({
-    brand_id: presetBrandId,
-    provider: 'META_WHATSAPP_CLOUD',
+  const [sdkReady, setSdkReady] = useState(false)
+  const [sdkLoading, setSdkLoading] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [sessionInfo, setSessionInfo] = useState<Record<string, unknown> | null>(null)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [testPhone, setTestPhone] = useState('')
+  const [testTemplateId, setTestTemplateId] = useState('')
+  const [testingMsg, setTestingMsg] = useState(false)
+
+  // Advanced manual form
+  const [manual, setManual] = useState({
     display_name: 'WhatsApp Meta',
     waba_id: '',
     phone_number_id: '',
@@ -36,8 +87,14 @@ export default function ChannelWhatsAppSetup() {
     access_token: '',
     app_secret: '',
     webhook_verify_token: '',
-    api_version: 'v23.0',
-    status: 'ACTIVE',
+  })
+
+  const frontendMetaReady = Boolean(META_APP_ID && META_CONFIG_ID)
+
+  const { data: setupStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['whatsapp-meta-setup-status'],
+    queryFn: async () => (await channelConnectionApi.metaSetupStatus()).data,
+    retry: false,
   })
 
   const { data: brands = [] } = useQuery({
@@ -45,166 +102,289 @@ export default function ChannelWhatsAppSetup() {
     queryFn: async () => (await brandApi.list()).data,
   })
 
-  const { data: connections = [] } = useQuery({
-    queryKey: ['channel-connections'],
+  const { data: connections = [], refetch: refetchConnections } = useQuery({
+    queryKey: ['channel-connections', 'WHATSAPP'],
     queryFn: async () => {
       const res = await channelConnectionApi.list({ channel_type: 'WHATSAPP' })
       return Array.isArray(res.data) ? res.data : []
     },
   })
 
-  const existing = useMemo(() => {
-    if (!form.brand_id) return null
+  const connection = useMemo(() => {
+    if (!brandId) return null
     return (
       connections.find(
         (c: any) =>
-          String(c.brand_id) === String(form.brand_id) && c.channel_type === 'WHATSAPP'
+          String(c.brand_id) === String(brandId) && c.channel_type === 'WHATSAPP'
       ) || null
     )
-  }, [connections, form.brand_id])
+  }, [connections, brandId])
+
+  const { data: approvedTemplates = [] } = useQuery({
+    queryKey: ['templates-wa-approved', brandId, connection?.id],
+    enabled: Boolean(brandId && connection?.id),
+    queryFn: async () => {
+      const res = await templateApi.list({ brand_id: brandId, channel_type: 'WHATSAPP' })
+      const rows = Array.isArray(res.data?.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+          ? res.data
+          : []
+      return rows.filter(
+        (t: any) => String(t.provider_approval_status || '').toUpperCase() === 'APPROVED'
+      )
+    },
+  })
 
   useEffect(() => {
-    if (!existing) {
-      setEditId(null)
+    const onMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('facebook.com')) return
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+          setSessionInfo(data)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  useEffect(() => {
+    if (!frontendMetaReady) {
+      setSdkReady(false)
       return
     }
-    setEditId(existing.id)
-    setForm((prev) => ({
-      ...prev,
-      display_name: existing.display_name || prev.display_name,
-      provider: existing.provider || 'META_WHATSAPP_CLOUD',
-      waba_id: existing.settings?.waba_id || '',
-      phone_number_id: existing.settings?.phone_number_id || '',
-      business_phone_number: existing.settings?.business_phone_number || '',
-      api_version: existing.settings?.api_version || 'v23.0',
-      access_token: '',
-      app_secret: '',
-      webhook_verify_token: '',
-    }))
-  }, [existing?.id])
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const payload: any = {
-        brand_id: Number(form.brand_id),
-        channel_type: 'WHATSAPP',
-        display_name: form.display_name.trim() || 'WhatsApp Meta',
-        provider: form.provider,
-        status: form.status,
-        settings: {
-          waba_id: form.waba_id.trim(),
-          phone_number_id: form.phone_number_id.trim(),
-          business_phone_number: form.business_phone_number.trim(),
-          api_version: form.api_version.trim() || 'v23.0',
-        },
-      }
-      if (form.access_token.trim()) payload.access_token = form.access_token.trim()
-      if (form.app_secret.trim()) payload.app_secret = form.app_secret.trim()
-      if (form.webhook_verify_token.trim()) {
-        payload.webhook_verify_token = form.webhook_verify_token.trim()
-      }
-
-      if (editId) return channelConnectionApi.update(editId, payload)
-      if (!form.access_token.trim() || !form.phone_number_id.trim()) {
-        throw {
-          response: {
-            data: { error: 'Access token ve telefon numarası ID gerekli' },
-          },
+    let cancelled = false
+    setSdkLoading(true)
+    loadFacebookSdk(META_APP_ID)
+      .then(() => {
+        if (!cancelled) setSdkReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSdkReady(false)
+          setError('Facebook SDK yüklenemedi. Ağ veya App ID ayarını kontrol edin.')
         }
-      }
-      return channelConnectionApi.create(payload)
-    },
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
-      const id = res.data?.id || editId
-      setInfo('Kanal kaydedildi')
+      })
+      .finally(() => {
+        if (!cancelled) setSdkLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [frontendMetaReady])
+
+  const completeMutation = useMutation({
+    mutationFn: (payload: {
+      brandId: number
+      authorizationCode: string
+      sessionInfo?: Record<string, unknown> | null
+    }) => channelConnectionApi.completeEmbeddedSignup(payload),
+    onSuccess: async () => {
+      setInfo('WhatsApp Embedded Signup tamamlandı. Bağlantı aktif.')
       setError('')
-      if (id) setEditId(Number(id))
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+      await refetchConnections()
     },
     onError: (err: any) => {
-      setError(channelSetupApiError(err, 'WhatsApp kanalı kaydedilemedi'))
+      setError(channelSetupApiError(err, 'Embedded Signup tamamlanamadı'))
       setInfo('')
     },
   })
 
-  const onTest = async () => {
+  const launchEmbeddedSignup = useCallback(() => {
     setError('')
     setInfo('')
-    if (!form.brand_id) {
-      setError('Eksik bilgi: önce marka seçin.')
+    if (!frontendMetaReady || !setupStatus?.embeddedSignupReady) {
+      setError('Meta WhatsApp yapılandırması tamamlanmamış')
       return
     }
-    if (!editId && (!form.access_token.trim() || !form.phone_number_id.trim())) {
-      setError('Eksik bilgi: Access token ve Phone Number ID gerekli.')
+    if (!brandId) {
+      setError('Önce marka seçin')
       return
     }
-    setTesting(true)
-    try {
-      let id = editId
-      if (!id) {
-        const saved = await saveMutation.mutateAsync()
-        id = saved.data?.id
-        if (id) setEditId(Number(id))
-      }
-      if (!id) {
-        setError('Kayıt başarısız. Önce kaydı tamamlayın.')
-        return
-      }
-      const res = await channelConnectionApi.test(Number(id))
-      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
-      if (res.data?.success === false) {
-        setError(
-          res.data?.error ||
-            res.data?.message ||
-            'Bağlantı testi başarısız. Sağlayıcı bilgilerini kontrol edin.'
+    if (!window.FB || !sdkReady) {
+      setError('Facebook SDK henüz hazır değil')
+      return
+    }
+
+    setConnecting(true)
+    window.FB.login(
+      (response: any) => {
+        const code = response?.authResponse?.code
+        if (!code) {
+          setConnecting(false)
+          if (response?.status === 'unknown' || !response?.authResponse) {
+            setInfo('Bağlantı iptal edildi. Kayıt oluşturulmadı.')
+          } else {
+            setError('Meta yetkilendirme kodu alınamadı')
+          }
+          return
+        }
+        completeMutation.mutate(
+          {
+            brandId: Number(brandId),
+            authorizationCode: code,
+            sessionInfo,
+          },
+          {
+            onSettled: () => setConnecting(false),
+          }
         )
+      },
+      {
+        config_id: META_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: '',
+          sessionInfoVersion: '3',
+        },
+      }
+    )
+  }, [
+    brandId,
+    completeMutation,
+    frontendMetaReady,
+    sdkReady,
+    sessionInfo,
+    setupStatus?.embeddedSignupReady,
+  ])
+
+  const verifyMutation = useMutation({
+    mutationFn: () => channelConnectionApi.verifyWhatsApp(connection!.id),
+    onSuccess: (res) => {
+      setInfo(res.data?.message || 'Bağlantı doğrulandı')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Doğrulama başarısız')),
+  })
+
+  const syncMutation = useMutation({
+    mutationFn: () => channelConnectionApi.syncWhatsAppTemplates(connection!.id),
+    onSuccess: (res) => {
+      setInfo(
+        `Şablonlar senkronize edildi: ${res.data?.synced ?? 0} kayıt, ${res.data?.approved ?? 0} onaylı`
+      )
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['templates-wa-approved'] })
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Şablon senkronizasyonu başarısız')),
+  })
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => channelConnectionApi.disconnectWhatsApp(connection!.id),
+    onSuccess: (res) => {
+      setInfo(res.data?.message || 'Bağlantı kaldırıldı')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Bağlantı kaldırılamadı')),
+  })
+
+  const manualSave = useMutation({
+    mutationFn: async () => {
+      const payload: any = {
+        brand_id: Number(brandId),
+        channel_type: 'WHATSAPP',
+        display_name: manual.display_name.trim() || 'WhatsApp Meta',
+        provider: 'META_WHATSAPP_CLOUD',
+        status: 'ACTIVE',
+        settings: {
+          waba_id: manual.waba_id.trim(),
+          phone_number_id: manual.phone_number_id.trim(),
+          business_phone_number: manual.business_phone_number.trim(),
+          connection_method: 'MANUAL',
+        },
+        access_token: manual.access_token.trim(),
+        app_secret: manual.app_secret.trim(),
+        webhook_verify_token: manual.webhook_verify_token.trim(),
+      }
+      if (connection?.id) {
+        return channelConnectionApi.update(connection.id, payload)
+      }
+      return channelConnectionApi.create(payload)
+    },
+    onSuccess: () => {
+      setInfo('Gelişmiş bağlantı kaydedildi')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Manuel kayıt başarısız')),
+  })
+
+  const onManualSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!brandId) {
+      setError('Marka seçin')
+      return
+    }
+    await manualSave.mutateAsync()
+  }
+
+  const sendTestTemplate = async () => {
+    setError('')
+    setInfo('')
+    if (!connection?.id) return
+    const tpl = approvedTemplates.find((t: any) => String(t.id) === String(testTemplateId))
+    if (!testPhone.trim() || !tpl?.provider_template_name) {
+      setError('Test telefonu ve onaylı şablon seçin')
+      return
+    }
+    setTestingMsg(true)
+    try {
+      const res = await channelConnectionApi.testWhatsAppTemplate(connection.id, {
+        to: testPhone.trim(),
+        templateName: tpl.provider_template_name,
+        language: tpl.provider_template_language || 'tr',
+      })
+      if (!res.data?.wamid) {
+        setError('Meta wamid dönmedi; test başarısız sayıldı')
       } else {
-        setInfo(res.data?.message || 'Bağlantı testi başarılı')
+        setInfo(`Test mesajı gönderildi. wamid: ${res.data.wamid}`)
       }
     } catch (err: any) {
-      setError(channelSetupApiError(err, 'Bağlantı testi başarısız'))
+      setError(channelSetupApiError(err, 'Test mesajı başarısız'))
     } finally {
-      setTesting(false)
+      setTestingMsg(false)
     }
   }
 
   const copyWebhook = async () => {
+    const url = setupStatus?.webhookUrl
+    if (!url) return
     try {
-      await navigator.clipboard.writeText(hookUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      await navigator.clipboard.writeText(url)
+      setInfo('Webhook URL kopyalandı')
     } catch {
       setError('Webhook URL kopyalanamadı')
     }
   }
 
-  const canNext = () => {
-    if (step === 0) return Boolean(form.brand_id)
-    if (step === 1) return Boolean(form.provider)
-    if (step === 2) {
-      if (editId) {
-        return Boolean(form.phone_number_id.trim() && form.business_phone_number.trim())
-      }
-      return Boolean(
-        form.waba_id.trim() &&
-          form.phone_number_id.trim() &&
-          form.business_phone_number.trim() &&
-          form.access_token.trim() &&
-          form.webhook_verify_token.trim()
-      )
-    }
-    return true
-  }
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    try {
-      await saveMutation.mutateAsync()
-      navigate('/channels')
-    } catch {
-      /* error state set in mutation */
-    }
-  }
+  const statusRows = [
+    { label: 'App ID mevcut', ok: Boolean(setupStatus?.appIdPresent && META_APP_ID) },
+    { label: 'Config ID mevcut', ok: Boolean(setupStatus?.configIdPresent && META_CONFIG_ID) },
+    { label: 'Public HTTPS webhook mevcut', ok: Boolean(setupStatus?.publicBackendUrlPresent) },
+    {
+      label: 'Webhook verify token yapılandırıldı',
+      ok: Boolean(setupStatus?.webhookVerifyTokenPresent),
+    },
+    {
+      label: 'WABA subscription (bağlantı sonrası)',
+      ok: connection?.settings?.webhook_status === 'SUBSCRIBED',
+    },
+    {
+      label: 'App Review / izinler',
+      ok: false,
+      note: 'Meta Dashboard’da doğrulanır',
+    },
+  ]
 
   return (
     <div className="mc-shell pt-1 pb-10 max-w-3xl">
@@ -221,26 +401,8 @@ export default function ChannelWhatsAppSetup() {
         WhatsApp kanalını bağla
       </h1>
       <p className="text-sm text-ink-soft mt-1 mb-6">
-        Meta WhatsApp Business Platform (Cloud API) bilgilerini girin. Token ve secret
-        değerleri şifreli saklanır; API yanıtında geri dönmez.
+        Ana yöntem: Meta Embedded Signup. Token ve secret değerleri yalnızca sunucuda saklanır.
       </p>
-
-      <ol className="flex flex-wrap gap-2 mb-6">
-        {STEPS.map((label, i) => (
-          <li
-            key={label}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border ${
-              i === step
-                ? 'bg-signal text-white border-signal'
-                : i < step
-                  ? 'bg-signal/10 text-signal-deep border-signal/20'
-                  : 'bg-white text-ink-faint border-canvas-line'
-            }`}
-          >
-            {i + 1}. {label}
-          </li>
-        ))}
-      </ol>
 
       {(error || info) && (
         <div
@@ -254,221 +416,263 @@ export default function ChannelWhatsAppSetup() {
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="mc-panel mc-panel-asymmetric p-5 space-y-4">
-        {step === 0 && (
-          <label className="block text-sm">
-            <span className="text-ink-soft font-medium">Marka</span>
-            <select
-              className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line bg-white"
-              value={form.brand_id}
-              onChange={(e) => setForm({ ...form, brand_id: e.target.value })}
-              required
+      <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
+        <h2 className="font-semibold text-ink">Meta Kurulum Durumu</h2>
+        {statusLoading ? (
+          <p className="text-sm text-ink-soft">Kontrol ediliyor…</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {statusRows.map((row) => (
+              <li key={row.label} className="flex items-center justify-between gap-3">
+                <span className="text-ink-soft">
+                  {row.label}
+                  {row.note ? ` · ${row.note}` : ''}
+                </span>
+                <span
+                  className={
+                    row.ok ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'
+                  }
+                >
+                  {row.ok ? 'Tamam' : 'Eksik / manuel'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {setupStatus?.webhookUrl && (
+          <div className="pt-2">
+            <p className="text-xs text-ink-faint mb-1">Webhook URL</p>
+            <div className="flex gap-2">
+              <code className="flex-1 text-xs bg-canvas-soft rounded-lg px-3 py-2 break-all">
+                {setupStatus.webhookUrl}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyWebhook()}
+                className="px-3 py-2 rounded-xl border border-canvas-line text-sm"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-ink-faint mt-1">
+              Eski uyumluluk: /api/webhooks/whatsapp/meta
+            </p>
+          </div>
+        )}
+        {!setupStatus?.embeddedSignupReady && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            Meta WhatsApp yapılandırması tamamlanmamış. Embedded Signup butonu çalışmaz.
+            {Array.isArray(setupStatus?.missing) && setupStatus.missing.length > 0
+              ? ` Eksik: ${setupStatus.missing.join(', ')}`
+              : !frontendMetaReady
+                ? ' Frontend: VITE_META_APP_ID / VITE_META_WHATSAPP_CONFIG_ID'
+                : ''}
+          </p>
+        )}
+      </section>
+
+      <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
+        <label className="block text-sm">
+          <span className="text-ink-soft font-medium">Marka</span>
+          <select
+            className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line bg-white"
+            value={brandId}
+            onChange={(e) => setBrandId(e.target.value)}
+          >
+            <option value="">Marka seçin</option>
+            {brands.map((b: any) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          disabled={
+            connecting ||
+            completeMutation.isPending ||
+            sdkLoading ||
+            !setupStatus?.embeddedSignupReady ||
+            !frontendMetaReady ||
+            !brandId
+          }
+          onClick={launchEmbeddedSignup}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1877F2] text-white text-sm font-semibold disabled:opacity-50"
+        >
+          {connecting || completeMutation.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : null}
+          Meta ile WhatsApp Bağla
+        </button>
+        <p className="text-xs text-ink-faint">
+          Kullanıcı iptal ederse kanal kaydı oluşturulmaz. App secret frontend’e gönderilmez.
+        </p>
+      </section>
+
+      {connection && (
+        <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-ink">Bağlı kanal</h2>
+              <p className="text-sm text-ink-soft mt-1">
+                {connection.settings?.verified_name || connection.display_name}
+              </p>
+              <p className="text-sm text-ink">
+                {connection.settings?.business_phone_number || '—'}
+              </p>
+              <p className="text-xs text-ink-faint mt-1">
+                Durum: {connection.status} · Webhook:{' '}
+                {connection.settings?.webhook_status || '—'} · Onaylı şablon:{' '}
+                {connection.settings?.approved_template_count ?? approvedTemplates.length}
+              </p>
+            </div>
+            {connection.status === 'ACTIVE' && (
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Bağlı
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={verifyMutation.isPending}
+              onClick={() => verifyMutation.mutate()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
             >
-              <option value="">Marka seçin</option>
-              {brands.map((b: any) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
+              {verifyMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FlaskConical className="w-4 h-4" />
+              )}
+              Bağlantıyı doğrula
+            </button>
+            <button
+              type="button"
+              disabled={syncMutation.isPending}
+              onClick={() => syncMutation.mutate()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+            >
+              {syncMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Şablonları senkronize et
+            </button>
+            <button
+              type="button"
+              disabled={disconnectMutation.isPending}
+              onClick={() => {
+                if (window.confirm('WhatsApp bağlantısı kaldırılsın mı? Geçmiş konuşmalar silinmez.')) {
+                  disconnectMutation.mutate()
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 text-red-600 text-sm"
+            >
+              <Unplug className="w-4 h-4" />
+              Bağlantıyı kaldır
+            </button>
+          </div>
+
+          <div className="border-t border-canvas-line pt-4 space-y-3">
+            <h3 className="text-sm font-medium text-ink">Test şablon mesajı</h3>
+            <input
+              className="w-full px-3 py-2 rounded-xl border text-sm"
+              placeholder="Test telefonu (E.164, örn. +905xxxxxxxxx)"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+            />
+            <select
+              className="w-full px-3 py-2 rounded-xl border text-sm"
+              value={testTemplateId}
+              onChange={(e) => setTestTemplateId(e.target.value)}
+            >
+              <option value="">Onaylı şablon seçin</option>
+              {approvedTemplates.map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.provider_template_name} ({t.provider_template_language})
                 </option>
               ))}
             </select>
-          </label>
-        )}
-
-        {step === 1 && (
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 p-4 rounded-xl border border-signal bg-signal/5 cursor-pointer">
-              <input
-                type="radio"
-                name="provider"
-                checked={form.provider === 'META_WHATSAPP_CLOUD'}
-                onChange={() => setForm({ ...form, provider: 'META_WHATSAPP_CLOUD' })}
-              />
-              <div>
-                <p className="font-medium text-ink">Meta WhatsApp Cloud</p>
-                <p className="text-xs text-ink-soft">WhatsApp Business Platform</p>
-              </div>
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">Görünen ad</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.display_name}
-                onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-              />
-            </label>
-            <div className="rounded-xl border border-canvas-line bg-canvas-soft/50 p-3">
-              <p className="text-xs text-ink-faint mb-1.5">Webhook URL (Meta konsoluna yapıştırın)</p>
-              <div className="flex gap-2">
-                <code className="flex-1 text-xs break-all bg-white border border-canvas-line rounded-lg px-2.5 py-2">
-                  {hookUrl}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyWebhook()}
-                  className="shrink-0 px-3 rounded-lg border border-canvas-line text-xs hover:bg-white"
-                >
-                  <Copy className="w-3.5 h-3.5 inline mr-1" />
-                  {copied ? 'Kopyalandı' : 'Kopyala'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-3">
-            {editId && (
-              <p className="text-xs text-ink-faint bg-canvas-soft rounded-lg px-3 py-2">
-                Mevcut bağlantı düzenleniyor. Token alanlarını boş bırakırsanız önceki değerler
-                korunur.
-              </p>
-            )}
-            <label className="block text-sm">
-              <span className="text-ink-soft">WABA ID</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.waba_id}
-                onChange={(e) => setForm({ ...form, waba_id: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">Phone Number ID</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.phone_number_id}
-                onChange={(e) => setForm({ ...form, phone_number_id: e.target.value })}
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">İşletme telefon numarası</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.business_phone_number}
-                onChange={(e) => setForm({ ...form, business_phone_number: e.target.value })}
-                placeholder="+90..."
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">Access token</span>
-              <input
-                type="password"
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.access_token}
-                onChange={(e) => setForm({ ...form, access_token: e.target.value })}
-                autoComplete="new-password"
-                placeholder={editId ? '•••••••• (değiştirmek için yazın)' : ''}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">App secret</span>
-              <input
-                type="password"
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.app_secret}
-                onChange={(e) => setForm({ ...form, app_secret: e.target.value })}
-                autoComplete="new-password"
-                placeholder={editId ? '••••••••' : ''}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">Webhook verify token</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.webhook_verify_token}
-                onChange={(e) => setForm({ ...form, webhook_verify_token: e.target.value })}
-                placeholder={editId ? 'Değiştirmek için yeni değer' : ''}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink-soft">API sürümü</span>
-              <input
-                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line"
-                value={form.api_version}
-                onChange={(e) => setForm({ ...form, api_version: e.target.value })}
-              />
-            </label>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="rounded-xl bg-canvas-soft/60 border border-canvas-line p-4 text-sm space-y-1">
-              <p>
-                <span className="text-ink-faint">Marka:</span>{' '}
-                {brands.find((b: any) => String(b.id) === form.brand_id)?.name || '—'}
-              </p>
-              <p>
-                <span className="text-ink-faint">Telefon:</span>{' '}
-                {form.business_phone_number || '—'}
-              </p>
-              <p>
-                <span className="text-ink-faint">Phone Number ID:</span>{' '}
-                {form.phone_number_id || '—'}
-              </p>
-              <p className="text-xs text-ink-faint pt-2 break-all">Webhook: {hookUrl}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void onTest()}
-                disabled={testing || saveMutation.isPending}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-canvas-line text-sm hover:bg-canvas-soft disabled:opacity-50"
-              >
-                {testing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FlaskConical className="w-4 h-4" />
-                )}
-                Bağlantıyı test et
-              </button>
-              <button
-                type="submit"
-                disabled={saveMutation.isPending}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-signal text-white text-sm font-medium disabled:opacity-50"
-              >
-                {saveMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Kaydet ve aktifleştir
-              </button>
-            </div>
-            {info && !error && (
-              <p className="text-sm text-emerald-700 inline-flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" />
-                {info} ·{' '}
-                <Link to="/channels" className="underline">
-                  Bağlantılara dön
-                </Link>
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="flex justify-between pt-2 border-t border-canvas-line/70">
-          <button
-            type="button"
-            disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            className="px-4 py-2 text-sm rounded-xl border border-canvas-line disabled:opacity-40"
-          >
-            Geri
-          </button>
-          {step < STEPS.length - 1 ? (
             <button
               type="button"
-              disabled={!canNext()}
-              onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
-              className="px-4 py-2 text-sm rounded-xl bg-dock text-white disabled:opacity-40"
+              disabled={testingMsg || approvedTemplates.length === 0}
+              onClick={() => void sendTestTemplate()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dock text-white text-sm disabled:opacity-50"
             >
-              İleri
+              {testingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+              Test mesajı gönder
             </button>
-          ) : null}
-        </div>
-      </form>
+          </div>
+        </section>
+      )}
+
+      <section className="mc-panel mc-panel-asymmetric p-5">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="w-full flex items-center justify-between text-sm font-medium text-ink"
+        >
+          Gelişmiş bağlantı (manuel credential)
+          {advancedOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {advancedOpen && (
+          <form onSubmit={onManualSubmit} className="mt-4 space-y-3">
+            <p className="text-xs text-ink-faint">
+              Yalnızca geliştirme / yönetici amaçlı. Üretimde Embedded Signup kullanın.
+            </p>
+            {(
+              [
+                ['display_name', 'Görünen ad'],
+                ['waba_id', 'WABA ID'],
+                ['phone_number_id', 'Phone Number ID'],
+                ['business_phone_number', 'İşletme telefonu'],
+                ['access_token', 'Access token'],
+                ['app_secret', 'App secret'],
+                ['webhook_verify_token', 'Webhook verify token'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="block text-sm">
+                <span className="text-ink-soft">{label}</span>
+                <input
+                  type={
+                    key.includes('token') || key.includes('secret') ? 'password' : 'text'
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded-xl border text-sm"
+                  value={(manual as any)[key]}
+                  onChange={(e) => setManual({ ...manual, [key]: e.target.value })}
+                  autoComplete="off"
+                />
+              </label>
+            ))}
+            <button
+              type="submit"
+              disabled={manualSave.isPending || !brandId}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-signal text-white text-sm disabled:opacity-50"
+            >
+              {manualSave.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Kaydet ve aktifleştir
+            </button>
+            {setupStatus?.webhookUrl && (
+              <p className="text-xs text-ink-faint break-all">Webhook: {setupStatus.webhookUrl}</p>
+            )}
+          </form>
+        )}
+      </section>
+
+      <p className="mt-4 text-sm text-ink-soft">
+        <Link to="/channels" className="underline text-signal-deep">
+          Kanal Bağlantıları’na dön
+        </Link>
+      </p>
     </div>
   )
 }
