@@ -14,6 +14,14 @@ import {
 } from 'lucide-react'
 import { brandApi, contactApi } from '../services/api'
 import { APP_DISPLAY_NAME } from '../config/app'
+import {
+  brandNumericId,
+  buildContactCreateBrandPayload,
+  initialSelectedBrandIds,
+  normalizeBrandsList,
+  selectedIdsMatchVisibleSelection,
+  toggleBrandId,
+} from '../utils/contactCreateBrandSelection'
 
 const PREF_LABEL: Record<string, string> = {
   UNKNOWN: 'Bilinmiyor',
@@ -125,9 +133,27 @@ export default function Contacts() {
     queryKey: ['brands'],
     queryFn: async () => {
       const res = await brandApi.list()
-      return Array.isArray(res.data) ? res.data : []
+      return normalizeBrandsList(res.data)
     },
   })
+
+  // When modal is open, keep selection synced: page filter or single-brand auto-select.
+  useEffect(() => {
+    if (!showCreate) return
+    setCreateForm((prev) => {
+      if (prev.brand_ids.length > 0) {
+        // Drop stale IDs that are no longer in the loaded brand list
+        const valid = prev.brand_ids.filter((id) =>
+          brands.some((b) => brandNumericId(b) === id)
+        )
+        if (valid.length === prev.brand_ids.length) return prev
+        if (valid.length > 0) return { ...prev, brand_ids: valid }
+      }
+      const seeded = initialSelectedBrandIds({ brands, pageBrandId: brandId })
+      if (seeded.length === 0) return prev.brand_ids.length ? { ...prev, brand_ids: [] } : prev
+      return { ...prev, brand_ids: seeded }
+    })
+  }, [showCreate, brands, brandId])
 
   const listParams = useMemo(
     () => ({
@@ -196,40 +222,46 @@ export default function Contacts() {
   }
 
   const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!createForm.brand_ids.length) {
-        throw Object.assign(new Error('Bu marka bulunamadı.'), {
+    mutationFn: async (form: typeof createForm) => {
+      const brandPayload = buildContactCreateBrandPayload(form.brand_ids, brands)
+      if (!brandPayload.ok) {
+        throw Object.assign(new Error(brandPayload.error), {
+          response: { status: 400, data: { error: brandPayload.error } },
+        })
+      }
+      if (!selectedIdsMatchVisibleSelection(brandPayload.brand_ids, brands)) {
+        throw Object.assign(new Error('En az bir marka seçin.'), {
           response: { status: 400, data: { error: 'En az bir marka seçin.' } },
         })
       }
 
       const points: any[] = []
-      const email = createForm.email.trim()
+      const email = form.email.trim()
       if (email) {
         points.push({ channel_type: 'EMAIL', value: email, is_primary: true })
       }
 
-      if (createForm.phone.trim()) {
-        const e164 = toE164Phone(createForm.phone, createForm.country_code)
+      if (form.phone.trim()) {
+        const e164 = toE164Phone(form.phone, form.country_code)
         if (!e164) {
           throw Object.assign(new Error('Telefon numarası geçersiz.'), {
             response: { status: 400, data: { error: 'Telefon numarası geçersiz.' } },
           })
         }
-        // SMS + WhatsApp same number so contact appears in both pickers
         points.push({ channel_type: 'SMS', value: e164, is_primary: true })
         points.push({ channel_type: 'WHATSAPP', value: e164, is_primary: true })
       }
 
       return contactApi.create({
-        first_name: createForm.first_name.trim() || null,
-        last_name: createForm.last_name.trim() || null,
-        company_name: createForm.company_name.trim() || null,
-        title: createForm.title.trim() || null,
-        brand_ids: createForm.brand_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0),
+        first_name: form.first_name.trim() || null,
+        last_name: form.last_name.trim() || null,
+        company_name: form.company_name.trim() || null,
+        title: form.title.trim() || null,
+        brand_ids: brandPayload.brand_ids,
         contact_points: points,
         email: email || null,
-        whatsapp_opt_in: createForm.whatsapp_opt_in,
+        whatsapp_opt_in: form.whatsapp_opt_in,
+        whatsapp_consent: form.whatsapp_opt_in,
       })
     },
     onSuccess: (res) => {
@@ -318,7 +350,7 @@ export default function Contacts() {
   const onCreate = (e: FormEvent) => {
     e.preventDefault()
     setError('')
-    createMutation.mutate()
+    createMutation.mutate(createForm)
   }
 
   const emailPrimary = detail ? primaryPoint(detail.contact_points, 'EMAIL') : null
@@ -344,6 +376,18 @@ export default function Contacts() {
           type="button"
           onClick={() => {
             setError('')
+            const seeded = initialSelectedBrandIds({ brands, pageBrandId: brandId })
+            setCreateForm({
+              first_name: '',
+              last_name: '',
+              company_name: '',
+              title: '',
+              email: '',
+              phone: '',
+              country_code: '90',
+              brand_ids: seeded,
+              whatsapp_opt_in: false,
+            })
             setShowCreate(true)
           }}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl rounded-tr-sm hover:bg-dock-raised transition-colors"
@@ -884,29 +928,33 @@ export default function Contacts() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              {brands.map((b: any) => {
-                const brandId = Number(b.id)
-                const on = createForm.brand_ids.includes(brandId)
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() =>
-                      setCreateForm({
-                        ...createForm,
-                        brand_ids: on
-                          ? createForm.brand_ids.filter((id) => id !== brandId)
-                          : [...createForm.brand_ids, brandId],
-                      })
-                    }
-                    className={`text-xs px-2 py-1 rounded-lg border ${
-                      on ? 'bg-dock text-white border-dock' : 'border-canvas-line'
-                    }`}
-                  >
-                    {b.name}
-                  </button>
-                )
-              })}
+              {brands.length === 0 ? (
+                <p className="text-xs text-ink-soft">Yüklü marka yok.</p>
+              ) : (
+                brands.map((b: any) => {
+                  const id = brandNumericId(b)
+                  if (id == null) return null
+                  const on = createForm.brand_ids.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          brand_ids: toggleBrandId(prev.brand_ids, id),
+                        }))
+                      }
+                      className={`text-xs px-2 py-1 rounded-lg border ${
+                        on ? 'bg-dock text-white border-dock' : 'border-canvas-line'
+                      }`}
+                    >
+                      {b.name}
+                    </button>
+                  )
+                })
+              )}
             </div>
             <label className="flex items-start gap-2 text-sm text-ink cursor-pointer select-none">
               <input
