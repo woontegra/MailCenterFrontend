@@ -76,6 +76,7 @@ export default function ChannelWhatsAppSetup() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const presetBrandId = searchParams.get('brandId') || ''
+  const intent = String(searchParams.get('intent') || '').toLowerCase()
 
   const [brandId, setBrandId] = useState(presetBrandId)
   const [error, setError] = useState('')
@@ -88,6 +89,7 @@ export default function ChannelWhatsAppSetup() {
   const [testPhone, setTestPhone] = useState('')
   const [testTemplateId, setTestTemplateId] = useState('')
   const [testingMsg, setTestingMsg] = useState(false)
+  const [managedConnectionId, setManagedConnectionId] = useState<string>('')
 
   const sessionRef = useRef<ParsedWaEmbeddedSignupEvent | null>(null)
   const completingRef = useRef(false)
@@ -138,15 +140,23 @@ export default function ChannelWhatsAppSetup() {
     },
   })
 
-  const connection = useMemo(() => {
-    if (!brandId) return null
-    const forBrand = connections.filter(
+  const brandConnections = useMemo(() => {
+    if (!brandId) return [] as any[]
+    return connections.filter(
       (c: any) =>
-        String(c.brand_id) === String(brandId) && c.channel_type === 'WHATSAPP'
+        String(c.brand_id) === String(brandId) &&
+        String(c.channel_type || '').toUpperCase() === 'WHATSAPP'
     )
-    if (forBrand.length === 0) return null
-    const active = forBrand.filter((c: any) => String(c.status).toUpperCase() === 'ACTIVE')
-    const pool = active.length ? active : forBrand
+  }, [connections, brandId])
+
+  const connection = useMemo(() => {
+    if (!brandConnections.length) return null
+    if (managedConnectionId) {
+      const hit = brandConnections.find((c: any) => String(c.id) === String(managedConnectionId))
+      if (hit) return hit
+    }
+    const active = brandConnections.filter((c: any) => String(c.status).toUpperCase() === 'ACTIVE')
+    const pool = active.length ? active : brandConnections
     const real = pool.find((c: any) => {
       const phone =
         c.phone_number ||
@@ -157,13 +167,36 @@ export default function ChannelWhatsAppSetup() {
       return digits && digits !== '15551548955' && !digits.endsWith('5551548955')
     })
     return real || pool[0] || null
-  }, [connections, brandId])
+  }, [brandConnections, managedConnectionId])
+
+  useEffect(() => {
+    if (!connection?.id) {
+      setManagedConnectionId('')
+      return
+    }
+    if (!managedConnectionId || !brandConnections.some((c) => String(c.id) === managedConnectionId)) {
+      setManagedConnectionId(String(connection.id))
+    }
+  }, [connection?.id, brandConnections, managedConnectionId])
+
+  useEffect(() => {
+    if (intent === 'coexistence') {
+      setInfo(
+        'Test bağlantısı dururken mevcut WhatsApp Business numaranızı ayrıca bağlayabilirsiniz.'
+      )
+    }
+  }, [intent])
 
   const { data: approvedTemplates = [] } = useQuery({
     queryKey: ['templates-wa-approved', brandId, connection?.id],
     enabled: Boolean(brandId && connection?.id),
     queryFn: async () => {
-      const res = await templateApi.list({ brand_id: brandId, channel_type: 'WHATSAPP' })
+      const res = await templateApi.list({
+        brand_id: brandId,
+        channel_type: 'WHATSAPP',
+        channel_connection_id: connection!.id,
+        approval_status: 'APPROVED',
+      })
       const rows = Array.isArray(res.data?.data)
         ? res.data.data
         : Array.isArray(res.data)
@@ -394,7 +427,7 @@ export default function ChannelWhatsAppSetup() {
   )
 
   const verifyMutation = useMutation({
-    mutationFn: () => channelConnectionApi.verifyWhatsApp(connection!.id),
+    mutationFn: (id: number) => channelConnectionApi.verifyWhatsApp(id),
     onSuccess: (res) => {
       setInfo(res.data?.message || 'Bağlantı doğrulandı')
       setError('')
@@ -404,7 +437,7 @@ export default function ChannelWhatsAppSetup() {
   })
 
   const syncMutation = useMutation({
-    mutationFn: () => channelConnectionApi.syncWhatsAppTemplates(connection!.id),
+    mutationFn: (id: number) => channelConnectionApi.syncWhatsAppTemplates(id),
     onSuccess: (res) => {
       setInfo(
         `Şablonlar senkronize edildi: ${res.data?.synced ?? 0} kayıt, ${res.data?.approved ?? 0} onaylı`
@@ -417,13 +450,23 @@ export default function ChannelWhatsAppSetup() {
   })
 
   const disconnectMutation = useMutation({
-    mutationFn: () => channelConnectionApi.disconnectWhatsApp(connection!.id),
+    mutationFn: (id: number) => channelConnectionApi.disconnectWhatsApp(id),
     onSuccess: (res) => {
       setInfo(res.data?.message || 'Bağlantı kaldırıldı')
       setError('')
       queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
     },
     onError: (err: any) => setError(channelSetupApiError(err, 'Bağlantı kaldırılamadı')),
+  })
+
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: number) => channelConnectionApi.setWhatsAppDefaultSender(id),
+    onSuccess: (res) => {
+      setInfo(res.data?.message || 'Varsayılan gönderici güncellendi')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Varsayılan gönderici ayarlanamadı')),
   })
 
   const manualSave = useMutation({
@@ -444,9 +487,7 @@ export default function ChannelWhatsAppSetup() {
         app_secret: manual.app_secret.trim(),
         webhook_verify_token: manual.webhook_verify_token.trim(),
       }
-      if (connection?.id) {
-        return channelConnectionApi.update(connection.id, payload)
-      }
+      // Always create a new connection from advanced form — never overwrite another number
       return channelConnectionApi.create(payload)
     },
     onSuccess: () => {
@@ -512,13 +553,6 @@ export default function ChannelWhatsAppSetup() {
     !setupStatus?.embeddedSignupReady ||
     !frontendMetaReady ||
     !brandId
-
-  const connectionTypeLabel = String(
-    connection?.settings?.connection_type || connection?.settings?.connection_method || ''
-  )
-  const isCoexistence =
-    connectionTypeLabel === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ||
-    connectionTypeLabel === 'COEXISTENCE'
 
   const statusRows = [
     { label: 'App ID mevcut', ok: Boolean(setupStatus?.appIdPresent && META_APP_ID) },
@@ -644,18 +678,18 @@ export default function ChannelWhatsAppSetup() {
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-3 space-y-2">
           <p className="text-sm text-emerald-900 font-medium flex items-center gap-2">
             <Smartphone className="w-4 h-4 shrink-0" />
-            Mevcut WhatsApp Business numaranızı uygulamadan silmeden MailCenter’a
-            bağlayabilirsiniz.
+            Yeni WhatsApp bağlantısı ekle
           </p>
           <p className="text-xs text-emerald-900/80">
-            Örn. +90 532 317 17 55 — Meta ekranında WhatsApp Business uygulamasındaki
-            numarayı seçin. Numara uygulamadan silinmez; Cloud API ile birlikte (coexistence)
-            çalışır.
+            Test numarası zaten bağlı olsa bile mevcut WhatsApp Business numaranızı (ör.
+            +90 532 317 17 55) ayrıca bağlayabilirsiniz. Numara uygulamadan silinmez;
+            Cloud API ile birlikte (coexistence) çalışır.
           </p>
         </div>
 
         <button
           type="button"
+          id="wa-coexistence-cta"
           disabled={metaButtonsDisabled}
           onClick={() => launchEmbeddedSignup('WHATSAPP_BUSINESS_APP_ONBOARDING')}
           className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1877F2] text-white text-sm font-semibold disabled:opacity-50"
@@ -675,118 +709,174 @@ export default function ChannelWhatsAppSetup() {
           {connecting && activeMode === 'STANDARD' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : null}
-          Yeni bir numara bağla
+          Yeni WhatsApp bağlantısı ekle
         </button>
 
         <p className="text-xs text-ink-faint">
           Kullanıcı iptal ederse kanal kaydı oluşturulmaz. Authorization code yalnızca bir kez
-          backend’e gönderilir; access token frontend’de saklanmaz.
+          backend’e gönderilir; access token frontend’de saklanmaz. Mevcut test bağlantısı
+          silinmez.
         </p>
       </section>
 
-      {connection && (
+      {brandConnections.length > 0 && (
         <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold text-ink">Bağlı kanal</h2>
-              <p className="text-sm text-ink-soft mt-1">
-                {connection.settings?.verified_name || connection.display_name}
-              </p>
-              <p className="text-sm text-ink">
-                {connection.settings?.business_phone_number || '—'}
-              </p>
-              <p className="text-xs text-ink-faint mt-1">
-                Durum: {connection.status} · Webhook:{' '}
-                {connection.settings?.webhook_status || '—'} · Onaylı şablon:{' '}
-                {connection.settings?.approved_template_count ?? approvedTemplates.length}
-                {isCoexistence ? ' · Tür: WhatsApp Business App (coexistence)' : ''}
-              </p>
-            </div>
-            {connection.status === 'ACTIVE' && (
-              <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Bağlı
-              </span>
-            )}
-          </div>
+          <h2 className="font-semibold text-ink">Mevcut WhatsApp bağlantıları</h2>
+          <p className="text-xs text-ink-soft">
+            Her satır ayrı channel_connection kaydıdır. Birini kaldırmak diğerini etkilemez.
+          </p>
+          <ul className="space-y-3">
+            {brandConnections.map((c: any) => {
+              const phone =
+                c.phone_number ||
+                c.settings?.business_phone_number ||
+                c.settings?.business_phone ||
+                '—'
+              const name = c.settings?.verified_name || c.display_name || 'WhatsApp'
+              const ctype = String(
+                c.connection_type ||
+                  c.settings?.connection_type ||
+                  c.settings?.connection_method ||
+                  ''
+              )
+              const selected = String(c.id) === String(managedConnectionId)
+              return (
+                <li
+                  key={c.id}
+                  className={`rounded-xl border px-3 py-3 ${
+                    selected ? 'border-dock bg-dock/5' : 'border-canvas-line bg-white'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => setManagedConnectionId(String(c.id))}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-ink">{name}</p>
+                        <p className="text-sm text-ink">{phone}</p>
+                        <p className="text-xs text-ink-faint mt-1">
+                          ID {c.id} · {c.status}
+                          {ctype ? ` · ${ctype}` : ''}
+                          {c.phone_number_id || c.settings?.phone_number_id
+                            ? ` · PNID ${c.phone_number_id || c.settings?.phone_number_id}`
+                            : ''}
+                          {c.waba_id || c.settings?.waba_id
+                            ? ` · WABA ${c.waba_id || c.settings?.waba_id}`
+                            : ''}
+                        </p>
+                      </div>
+                      {String(c.status).toUpperCase() === 'ACTIVE' && (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Bağlı
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      disabled={String(c.status).toUpperCase() !== 'ACTIVE' || setDefaultMutation.isPending}
+                      onClick={() => setDefaultMutation.mutate(Number(c.id))}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm disabled:opacity-50"
+                    >
+                      Varsayılan gönderici yap
+                    </button>
+                    <button
+                      type="button"
+                      disabled={disconnectMutation.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `${phone} bağlantısı kaldırılsın mı? Diğer WhatsApp bağlantıları etkilenmez.`
+                          )
+                        ) {
+                          disconnectMutation.mutate(Number(c.id))
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 text-red-600 text-sm"
+                    >
+                      <Unplug className="w-4 h-4" />
+                      Bağlantıyı kaldır
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={verifyMutation.isPending}
-              onClick={() => verifyMutation.mutate()}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
-            >
-              {verifyMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FlaskConical className="w-4 h-4" />
-              )}
-              Bağlantıyı doğrula
-            </button>
-            <button
-              type="button"
-              disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate()}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
-            >
-              {syncMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-              Şablonları senkronize et
-            </button>
-            <button
-              type="button"
-              disabled={disconnectMutation.isPending}
-              onClick={() => {
-                if (window.confirm('WhatsApp bağlantısı kaldırılsın mı? Geçmiş konuşmalar silinmez.')) {
-                  disconnectMutation.mutate()
-                }
-              }}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 text-red-600 text-sm"
-            >
-              <Unplug className="w-4 h-4" />
-              Bağlantıyı kaldır
-            </button>
-          </div>
+          {connection && (
+            <>
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-canvas-line">
+                <button
+                  type="button"
+                  disabled={verifyMutation.isPending || !connection.id}
+                  onClick={() => verifyMutation.mutate(Number(connection.id))}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                >
+                  {verifyMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FlaskConical className="w-4 h-4" />
+                  )}
+                  Seçili bağlantıyı doğrula
+                </button>
+                <button
+                  type="button"
+                  disabled={syncMutation.isPending || !connection.id}
+                  onClick={() => syncMutation.mutate(Number(connection.id))}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                >
+                  {syncMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Şablonları senkronize et
+                </button>
+              </div>
 
-          <div className="border-t border-canvas-line pt-4 space-y-3">
-            <h3 className="text-sm font-medium text-ink">Test şablon mesajı</h3>
-            <input
-              className="w-full px-3 py-2 rounded-xl border text-sm"
-              placeholder="Test telefonu (E.164, örn. +905xxxxxxxxx)"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-            />
-            <select
-              className="w-full px-3 py-2 rounded-xl border text-sm"
-              value={testTemplateId}
-              onChange={(e) => setTestTemplateId(e.target.value)}
-            >
-              <option value="">Onaylı şablon seçin</option>
-              {approvedTemplates.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.provider_template_name} ({t.provider_template_language})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={testingMsg || approvedTemplates.length === 0}
-              onClick={() => void sendTestTemplate()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dock text-white text-sm disabled:opacity-50"
-            >
-              {testingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
-              Test mesajı gönder
-            </button>
-            {approvedTemplates.length === 0 && (
-              <p className="text-xs text-amber-800">
-                Önce onaylı WhatsApp şablonlarını senkronize edin.
-              </p>
-            )}
-          </div>
+              <div className="border-t border-canvas-line pt-4 space-y-3">
+                <h3 className="text-sm font-medium text-ink">
+                  Test şablon mesajı (seçili bağlantı #{connection.id})
+                </h3>
+                <input
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  placeholder="Test telefonu (E.164, örn. +905xxxxxxxxx)"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                />
+                <select
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  value={testTemplateId}
+                  onChange={(e) => setTestTemplateId(e.target.value)}
+                >
+                  <option value="">Onaylı şablon seçin</option>
+                  {approvedTemplates.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.provider_template_name} ({t.provider_template_language})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={testingMsg || approvedTemplates.length === 0}
+                  onClick={() => void sendTestTemplate()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dock text-white text-sm disabled:opacity-50"
+                >
+                  {testingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+                  Test mesajı gönder
+                </button>
+                {approvedTemplates.length === 0 && (
+                  <p className="text-xs text-amber-800">
+                    Önce onaylı WhatsApp şablonlarını senkronize edin.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </section>
       )}
 

@@ -117,6 +117,8 @@ export const channelConnectionApi = {
     api.post(`/channel-connections/${id}/whatsapp/sync-templates`),
   ensureWhatsAppSender: (id: number) =>
     api.post(`/channel-connections/${id}/ensure-whatsapp-sender`),
+  setWhatsAppDefaultSender: (id: number) =>
+    api.post(`/channel-connections/${id}/whatsapp/set-default-sender`),
   verifyWhatsApp: (id: number) => api.post(`/channel-connections/${id}/whatsapp/verify`),
   disconnectWhatsApp: (id: number) =>
     api.post(`/channel-connections/${id}/whatsapp/disconnect`),

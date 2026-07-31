@@ -154,8 +154,9 @@ export default function Channels() {
           lastTest: smsConn?.last_tested_at || null,
         },
         whatsapp: {
+          connections: brandConnections.filter((c: any) => c.channel_type === 'WHATSAPP'),
           connection: waConn,
-          phone: waConn?.settings?.business_phone_number || null,
+          phone: waConn?.phone_number || waConn?.settings?.business_phone_number || null,
           verifiedName: waConn?.settings?.verified_name || waConn?.display_name || null,
           wabaName: waConn?.settings?.waba_name || null,
           webhookStatus: waConn?.settings?.webhook_status || null,
@@ -178,6 +179,27 @@ export default function Channels() {
     if (!connection && !fallbackConnected) return 'NOT_CONFIGURED'
     if (!connection && fallbackConnected) return 'ACTIVE'
     return connection.status || 'NOT_CONFIGURED'
+  }
+
+  function whatsappCardStatus(waConnections: any[]): string {
+    if (!waConnections.length) return 'NOT_CONFIGURED'
+    if (waConnections.some((c) => String(c.status).toUpperCase() === 'ACTIVE')) return 'ACTIVE'
+    if (waConnections.some((c) => String(c.status).toUpperCase() === 'ERROR')) return 'ERROR'
+    if (waConnections.some((c) => String(c.status).toUpperCase() === 'DISABLED')) return 'DISABLED'
+    return waConnections[0]?.status || 'NOT_CONFIGURED'
+  }
+
+  function waPhoneLabel(c: any): string {
+    return (
+      c.phone_number ||
+      c.settings?.business_phone_number ||
+      c.settings?.business_phone ||
+      '—'
+    )
+  }
+
+  function waNameLabel(c: any): string {
+    return c.settings?.verified_name || c.display_name || 'WhatsApp'
   }
 
   return (
@@ -335,41 +357,32 @@ export default function Channels() {
                         <p className="text-xs text-ink-faint">Meta Cloud</p>
                       </div>
                     </div>
-                    <StatusBadge status={channelStatus(whatsapp.connection)} />
+                    <StatusBadge status={whatsappCardStatus(whatsapp.connections)} />
                   </div>
                   <p className="text-xs text-ink-soft mb-3 leading-relaxed">
-                    Mevcut WhatsApp Business numaranızı uygulamadan silmeden MailCenter’a
+                    Test numarası bağlı olsa bile mevcut WhatsApp Business numaranızı ayrıca
                     bağlayabilirsiniz.
                   </p>
                   <ul className="text-sm text-ink-soft space-y-1.5 flex-1">
-                    <li>
-                      İşletme:{' '}
-                      <span className="text-ink font-medium">
-                        {whatsapp.verifiedName || whatsapp.wabaName || '—'}
-                      </span>
-                    </li>
-                    <li>
-                      Telefon:{' '}
-                      <span className="text-ink font-medium">{whatsapp.phone || '—'}</span>
-                    </li>
-                    <li>
-                      Webhook:{' '}
-                      <span className="text-ink font-medium">
-                        {whatsapp.webhookStatus ||
-                          (whatsapp.connection?.status === 'ACTIVE'
-                            ? 'Kontrol edilmeli'
-                            : 'Bağlı değil')}
-                      </span>
-                    </li>
+                    {whatsapp.connections.length === 0 ? (
+                      <li>
+                        Bağlantı:{' '}
+                        <span className="text-ink font-medium">Yok</span>
+                      </li>
+                    ) : (
+                      whatsapp.connections.map((c: any) => (
+                        <li key={c.id}>
+                          <span className="text-ink font-medium">{waNameLabel(c)}</span>
+                          {' · '}
+                          <span className="text-ink">{waPhoneLabel(c)}</span>
+                          {' · '}
+                          <span className="text-xs">{c.status}</span>
+                        </li>
+                      ))
+                    )}
                     <li>
                       Onaylı şablon:{' '}
                       <span className="text-ink font-medium">{whatsapp.approvedTemplates}</span>
-                    </li>
-                    <li>
-                      Son gelen:{' '}
-                      <span className="text-ink font-medium">
-                        {formatTime(whatsapp.lastInbound)}
-                      </span>
                     </li>
                     <li>
                       Son gönderim:{' '}
@@ -378,14 +391,22 @@ export default function Channels() {
                       </span>
                     </li>
                   </ul>
-                  <Link
-                    to={`/channels/whatsapp/setup?brandId=${brand.id}`}
-                    className="mt-4 w-full py-2.5 rounded-xl bg-dock text-white text-sm font-medium hover:bg-dock-raised transition-colors text-center block"
-                  >
-                    {whatsapp.connection
-                      ? 'Bağlantıyı yönet'
-                      : 'WhatsApp kanalını bağla'}
-                  </Link>
+                  <div className="mt-4 space-y-2">
+                    <Link
+                      to={`/channels/whatsapp/setup?brandId=${brand.id}&intent=coexistence`}
+                      className="w-full py-2.5 rounded-xl bg-[#1877F2] text-white text-sm font-medium hover:opacity-95 transition-opacity text-center block"
+                    >
+                      Mevcut WhatsApp Business numarasını bağla
+                    </Link>
+                    <Link
+                      to={`/channels/whatsapp/setup?brandId=${brand.id}`}
+                      className="w-full py-2.5 rounded-xl bg-dock text-white text-sm font-medium hover:bg-dock-raised transition-colors text-center block"
+                    >
+                      {whatsapp.connections.length
+                        ? 'Bağlantıyı yönet'
+                        : 'WhatsApp kanalını bağla'}
+                    </Link>
+                  </div>
                 </article>
               </div>
             </section>
