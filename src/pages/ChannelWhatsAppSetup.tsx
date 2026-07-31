@@ -766,6 +766,11 @@ export default function ChannelWhatsAppSetup() {
               {testingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
               Test mesajı gönder
             </button>
+            {approvedTemplates.length === 0 && (
+              <p className="text-xs text-amber-800">
+                Önce onaylı WhatsApp şablonlarını senkronize edin.
+              </p>
+            )}
           </div>
         </section>
       )}
