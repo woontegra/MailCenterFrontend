@@ -58,6 +58,17 @@ html {
     border-radius: 1.5rem 0.4rem 1.35rem 0.55rem;
   }
 
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   .mc-dock {
     background-color: #1a2332;
     color: #ffffff;

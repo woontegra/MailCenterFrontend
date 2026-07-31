@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { platformAdminApi } from '../../services/api'
+import { companyStatusLabel } from '../../utils/displayLabels'
 
 export default function PlatformTenantDetail() {
   const { id } = useParams()
@@ -86,10 +87,10 @@ export default function PlatformTenantDetail() {
   return (
     <div className="space-y-5 max-w-4xl">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.18em] text-teal-300/80">Tenant</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-teal-300/80">Firma</p>
         <h1 className="font-display text-3xl font-semibold mt-1">{tenant.name}</h1>
         <p className="text-sm text-white/50 mt-1">
-          {tenant.status} · {ent?.planCode || tenant.plan_code || '—'} ·{' '}
+          {companyStatusLabel(tenant.status)} · {ent?.planCode || tenant.plan_code || '—'} ·{' '}
           {ent?.billingPeriod || '—'}
         </p>
       </div>

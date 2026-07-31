@@ -333,7 +333,7 @@ export default function Contacts() {
                 className="text-xs rounded-lg bg-canvas-line/30 px-2 py-1.5 outline-none"
               >
                 <option value="">Aktif</option>
-                <option value="ACTIVE">ACTIVE</option>
+                <option value="ACTIVE">Aktif (tümü)</option>
                 <option value="ARCHIVED">Arşiv</option>
                 <option value="BLOCKED">Engelli</option>
               </select>

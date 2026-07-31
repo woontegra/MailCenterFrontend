@@ -5,7 +5,7 @@ import { APP_DISPLAY_NAME } from '../config/app'
 
 const nav = [
   { to: '/platform', end: true, icon: LayoutDashboard, label: 'Genel Bakış' },
-  { to: '/platform/tenants', end: false, icon: Building2, label: 'Tenantlar' },
+  { to: '/platform/tenants', end: false, icon: Building2, label: 'Firmalar' },
   { to: '/platform/plans', end: false, icon: Layers, label: 'Planlar' },
 ]
 
@@ -50,7 +50,7 @@ export default function PlatformLayout() {
           className="flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:text-white mb-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          Tenant uygulamasına dön
+          Ana uygulamaya dön
         </Link>
         <button
           type="button"

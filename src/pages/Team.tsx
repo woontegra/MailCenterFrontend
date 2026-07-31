@@ -4,16 +4,13 @@ import { UserPlus, Users } from 'lucide-react'
 import { teamApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { APP_DISPLAY_NAME } from '../config/app'
+import {
+  TENANT_ROLES,
+  tenantRoleLabel,
+  inviteStatusLabel,
+} from '../utils/displayLabels'
 
-const ROLES = ['OWNER', 'ADMIN', 'MANAGER', 'AGENT', 'VIEWER'] as const
-
-const roleLabel: Record<string, string> = {
-  OWNER: 'Sahip',
-  ADMIN: 'Yönetici',
-  MANAGER: 'Müdür',
-  AGENT: 'Temsilci',
-  VIEWER: 'İzleyici',
-}
+const ROLES = TENANT_ROLES
 
 function formatTime(value?: string | null) {
   if (!value) return '—'
@@ -151,7 +148,7 @@ export default function Team() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">Organizasyon</p>
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">Ekip</h1>
           <p className="text-sm text-ink-soft mt-1">
-            {APP_DISPLAY_NAME} tenant ekibi, roller ve davetler.
+            {APP_DISPLAY_NAME} ekip üyeleri, roller ve davetler.
           </p>
         </div>
         <button
@@ -225,7 +222,7 @@ export default function Team() {
                         </p>
                         <p className="text-xs text-ink-soft truncate">{m.email}</p>
                         <div className="flex gap-2 mt-1 text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-                          <span>{roleLabel[m.tenant_role] || m.tenant_role}</span>
+                          <span>{tenantRoleLabel(m.tenant_role)}</span>
                           <span>{m.is_active === false ? 'Pasif' : 'Aktif'}</span>
                         </div>
                       </button>
@@ -266,7 +263,7 @@ export default function Team() {
                   >
                     {assignableRoles.map((r) => (
                       <option key={r} value={r}>
-                        {roleLabel[r]}
+                        {tenantRoleLabel(r)}
                       </option>
                     ))}
                   </select>
@@ -329,7 +326,7 @@ export default function Team() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink truncate">{inv.email}</p>
                   <p className="text-xs text-ink-soft mt-0.5">
-                    {roleLabel[inv.tenant_role] || inv.tenant_role} · {inv.status}
+                    {tenantRoleLabel(inv.tenant_role)} · {inviteStatusLabel(inv.status)}
                     {inv.invited_by_email ? ` · davet: ${inv.invited_by_email}` : ''}
                   </p>
                   <p className="text-[11px] text-ink-faint mt-1">
@@ -382,12 +379,12 @@ export default function Team() {
             >
               {assignableRoles.map((r) => (
                 <option key={r} value={r}>
-                  {roleLabel[r]}
+                  {tenantRoleLabel(r)}
                 </option>
               ))}
             </select>
             <p className="text-xs text-ink-faint">
-              Davet maili tenant’ın aktif e-posta göndericisi üzerinden kuyruğa alınır. Gönderici yoksa
+              Davet maili firmanın aktif e-posta göndericisi üzerinden kuyruğa alınır. Gönderici yoksa
               davet yine de kaydedilir.
             </p>
             <div className="flex gap-2 pt-2">

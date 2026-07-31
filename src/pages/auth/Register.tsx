@@ -24,10 +24,10 @@ export default function Register() {
         setAuth(data.token, data.user)
         navigate('/')
       } else {
-        setError(data.error || 'Registration failed')
+        setError(data.error || 'Kayıt başarısız')
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed')
+      setError(err.response?.data?.error || 'Kayıt başarısız')
     } finally {
       setLoading(false)
     }
@@ -54,35 +54,35 @@ export default function Register() {
 
             <div>
               <label className="block text-sm font-normal text-gray-700 mb-2">
-                Company Name
+                Firma adı
               </label>
               <input
                 type="text"
                 value={tenantName}
                 onChange={(e) => setTenantName(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Acme Inc."
+                placeholder="Şirket adınız"
                 required
               />
             </div>
 
             <div>
               <label className="block text-sm font-normal text-gray-700 mb-2">
-                Email
+                E-posta
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="you@example.com"
+                placeholder="ornek@sirket.com"
                 required
               />
             </div>
 
             <div>
               <label className="block text-sm font-normal text-gray-700 mb-2">
-                Password
+                Şifre
               </label>
               <input
                 type="password"

@@ -209,6 +209,57 @@ export const platformAdminApi = {
   activity: (params?: any) => api.get('/platform-admin/activity', { params }),
 }
 
+/** Platform SUPER_ADMIN panel (/api/admin-platform) — same session as MailCenter login */
+export const adminPlatformApi = {
+  overview: () => api.get('/admin-platform/overview'),
+  controlCenter: () => api.get('/admin-platform/control-center'),
+  tenants: (params?: any) => api.get('/admin-platform/tenants', { params }),
+  tenant: (id: number) => api.get(`/admin-platform/tenants/${id}`),
+  createTenant: (data: any) => api.post('/admin-platform/tenants', data),
+  createFirm: (data: any) => api.post('/admin-platform/firms', data),
+  setTenantStatus: (id: number, data: { active: boolean }) =>
+    api.patch(`/admin-platform/tenants/${id}/status`, data),
+  updateTenant: (id: number, data: any) => api.patch(`/admin-platform/tenants/${id}`, data),
+  users: (params?: any) => api.get('/admin-platform/users', { params }),
+  createUser: (data: any) => api.post('/admin-platform/users', data),
+  setUserStatus: (id: number, data: { active: boolean }) =>
+    api.patch(`/admin-platform/users/${id}/status`, data),
+  setUserRole: (id: number, data: { tenantRole: string }) =>
+    api.patch(`/admin-platform/users/${id}/role`, data),
+  resetPassword: (id: number, data: { temporaryPassword: string }) =>
+    api.post(`/admin-platform/users/${id}/reset-password`, data),
+  revokeUserSessions: (id: number) => api.post(`/admin-platform/users/${id}/revoke-sessions`),
+  createReviewAccount: (data: any) => api.post('/admin-platform/review-accounts', data),
+  createAccount: (data: any) => api.post('/admin-platform/accounts', data),
+  plans: () => api.get('/admin-platform/plans'),
+  audit: (params?: any) => api.get('/admin-platform/audit', { params }),
+  subscriptions: (params?: any) => api.get('/admin-platform/subscriptions', { params }),
+  updateSubscription: (id: number, data: any) =>
+    api.patch(`/admin-platform/subscriptions/${id}`, data),
+  licenses: () => api.get('/admin-platform/licenses'),
+  createLicense: (data: any) => api.post('/admin-platform/licenses', data),
+  updateLicense: (id: number, data: any) => api.patch(`/admin-platform/licenses/${id}`, data),
+  licenseEvents: (id: number) => api.get(`/admin-platform/licenses/${id}/events`),
+  supportTickets: (params?: any) => api.get('/admin-platform/support-tickets', { params }),
+  createSupportTicket: (data: any) => api.post('/admin-platform/support-tickets', data),
+  updateSupportTicket: (id: number, data: any) =>
+    api.patch(`/admin-platform/support-tickets/${id}`, data),
+  supportMessages: (id: number) => api.get(`/admin-platform/support-tickets/${id}/messages`),
+  liveChat: () => api.get('/admin-platform/live-chat'),
+  sendStats: () => api.get('/admin-platform/send-stats'),
+  systemHealth: () => api.get('/admin-platform/system-health'),
+  queues: () => api.get('/admin-platform/queues'),
+  logs: (params?: any) => api.get('/admin-platform/logs', { params }),
+  devices: (params?: any) => api.get('/admin-platform/devices', { params }),
+  revokeDevice: (id: number) => api.post(`/admin-platform/devices/${id}/revoke`),
+  demoAccounts: () => api.get('/admin-platform/demo-accounts'),
+  meta: () => api.get('/admin-platform/meta'),
+  security: () => api.get('/admin-platform/security'),
+  brandsOverview: () => api.get('/admin-platform/brands-overview'),
+  mailAccountsOverview: () => api.get('/admin-platform/mail-accounts-overview'),
+  channelsOverview: () => api.get('/admin-platform/channels-overview'),
+}
+
 export const senderIdentityApi = {
   list: (params?: any) => api.get('/sender-identities', { params }),
   create: (data: any) => api.post('/sender-identities', data),

@@ -18,7 +18,7 @@ export default function PlatformTenants() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.18em] text-teal-300/80">Platform</p>
-          <h1 className="font-display text-3xl font-semibold mt-1">Tenantlar</h1>
+          <h1 className="font-display text-3xl font-semibold mt-1">Firmalar</h1>
         </div>
         <input
           className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm"

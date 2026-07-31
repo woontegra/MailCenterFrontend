@@ -5,6 +5,7 @@ import { Copy, Eye, Plus, Search, Trash2, Pencil } from 'lucide-react'
 import { brandApi, channelConnectionApi, senderIdentityApi, templateApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { normalizeWhatsAppTemplateName } from '../utils/whatsappTemplateName'
+import { approvalStatusLabel } from '../utils/displayLabels'
 
 const emptyForm = () => ({
   brand_id: '',
@@ -22,10 +23,17 @@ const emptyForm = () => ({
   category: '',
 })
 
+const CATEGORY_LABELS: Record<string, string> = {
+  UTILITY: 'Yardımcı',
+  MARKETING: 'Pazarlama',
+  AUTHENTICATION: 'Kimlik doğrulama',
+}
+
 function templateCategory(tpl: any): string {
   const comps = tpl?.provider_template_components
   if (comps && typeof comps === 'object' && !Array.isArray(comps) && comps.category) {
-    return String(comps.category)
+    const raw = String(comps.category).toUpperCase()
+    return CATEGORY_LABELS[raw] || String(comps.category)
   }
   return '—'
 }
@@ -387,7 +395,7 @@ export default function Templates() {
                       <li>
                         Meta durumu:{' '}
                         <span className="text-ink font-medium">
-                          {tpl.provider_approval_status || 'PENDING'}
+                          {approvalStatusLabel(tpl.provider_approval_status)}
                         </span>
                       </li>
                       <li>
@@ -651,14 +659,14 @@ export default function Templates() {
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                   >
                     <option value="">Kategori seçin</option>
-                    <option value="UTILITY">UTILITY</option>
-                    <option value="MARKETING">MARKETING</option>
-                    <option value="AUTHENTICATION">AUTHENTICATION</option>
+                    <option value="UTILITY">Yardımcı</option>
+                    <option value="MARKETING">Pazarlama</option>
+                    <option value="AUTHENTICATION">Kimlik doğrulama</option>
                   </select>
                 </label>
                 <p className="text-xs text-ink-faint rounded-xl bg-canvas-soft px-3 py-2">
                   Meta durumu kullanıcı tarafından seçilmez. Kayıt sonrası Meta’dan gelen durum
-                  (genelde PENDING) kullanılır; onay için “Şablonları senkronize et” çalıştırın.
+                  (genelde bekliyor) kullanılır; onay için “Şablonları senkronize et” çalıştırın.
                 </p>
               </>
             )}

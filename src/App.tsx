@@ -34,11 +34,39 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import InviteAccept from './pages/auth/InviteAccept'
 import { RequirePermission } from './components/auth/RequirePermission'
+import { RequireSuperAdmin } from './components/auth/RequireSuperAdmin'
 import PlatformLayout from './layouts/PlatformLayout'
 import PlatformOverview from './pages/platform/PlatformOverview'
 import PlatformTenants from './pages/platform/PlatformTenants'
 import PlatformTenantDetail from './pages/platform/PlatformTenantDetail'
 import PlatformPlans from './pages/platform/PlatformPlans'
+import AdminOverview from './pages/admin/AdminOverview'
+import AdminTenants from './pages/admin/AdminTenants'
+import AdminTenantDetail from './pages/admin/AdminTenantDetail'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminCreateUser from './pages/admin/AdminCreateUser'
+import AdminShell from './layouts/AdminShell'
+import {
+  AdminSubscriptions,
+  AdminLicenses,
+  AdminSupport,
+  AdminLiveChat,
+  AdminSendStats,
+  AdminSystemHealth,
+  AdminQueues,
+  AdminAuditPage,
+  AdminLogs,
+  AdminDevices,
+  AdminDemo,
+  AdminMeta,
+  AdminSecurity,
+} from './pages/admin/AdminModules'
+import {
+  AdminChannels,
+  AdminBrands,
+  AdminMailAccounts,
+  AdminWhatsApp,
+} from './pages/admin/AdminResourcePages'
 import { useAuthStore } from './store/authStore'
 import { authApi } from './services/api'
 
@@ -93,6 +121,7 @@ function App() {
         <Route path="/invite/:token" element={<InviteAccept />} />
         <Route path="/forbidden" element={<Forbidden />} />
 
+        {/* Legacy dark platform shell — keep for compatibility; primary UI is /admin */}
         <Route path="/platform" element={<PlatformLayout />}>
           <Route index element={<PlatformOverview />} />
           <Route path="tenants" element={<PlatformTenants />} />
@@ -101,6 +130,47 @@ function App() {
         </Route>
 
         <Route path="/" element={token && user ? <MainLayout /> : <Navigate to="/login" replace />}>
+          <Route
+            path="admin"
+            element={
+              <RequireSuperAdmin>
+                <AdminShell />
+              </RequireSuperAdmin>
+            }
+          >
+            <Route index element={<AdminOverview />} />
+            <Route path="yeni-kullanici" element={<AdminCreateUser />} />
+            <Route path="firmalar" element={<AdminTenants />} />
+            <Route path="firmalar/:id" element={<AdminTenantDetail />} />
+            <Route path="kullanicilar" element={<AdminUsers />} />
+            <Route path="abonelikler" element={<AdminSubscriptions />} />
+            <Route path="lisanslar" element={<AdminLicenses />} />
+            <Route path="kanallar" element={<AdminChannels />} />
+            <Route path="markalar" element={<AdminBrands />} />
+            <Route path="mail-hesaplari" element={<AdminMailAccounts />} />
+            <Route path="whatsapp" element={<AdminWhatsApp />} />
+            <Route path="destek" element={<AdminSupport />} />
+            <Route path="canli-sohbet" element={<AdminLiveChat />} />
+            <Route path="gonderim" element={<AdminSendStats />} />
+            <Route path="sistem-sagligi" element={<AdminSystemHealth />} />
+            <Route path="kuyruklar" element={<AdminQueues />} />
+            <Route path="islem-kayitlari" element={<AdminAuditPage />} />
+            <Route path="sistem-loglari" element={<AdminLogs />} />
+            <Route path="cihazlar" element={<AdminDevices />} />
+            <Route path="demo" element={<AdminDemo />} />
+            <Route path="meta" element={<AdminMeta />} />
+            <Route path="guvenlik" element={<AdminSecurity />} />
+            {/* Eski yollar */}
+            <Route path="firma-olustur" element={<Navigate to="/admin/yeni-kullanici" replace />} />
+            <Route path="hesap-olustur" element={<Navigate to="/admin/yeni-kullanici" replace />} />
+            <Route path="yeni-firma" element={<Navigate to="/admin/yeni-kullanici" replace />} />
+            <Route path="tenants/create" element={<Navigate to="/admin/yeni-kullanici" replace />} />
+            <Route path="tenants" element={<Navigate to="/admin/firmalar" replace />} />
+            <Route path="tenants/:id" element={<AdminTenantDetail />} />
+            <Route path="users" element={<Navigate to="/admin/kullanicilar" replace />} />
+            <Route path="audit" element={<Navigate to="/admin/islem-kayitlari" replace />} />
+            <Route path="loglar" element={<Navigate to="/admin/sistem-loglari" replace />} />
+          </Route>
           <Route index element={<Dashboard />} />
           <Route
             path="conversations"

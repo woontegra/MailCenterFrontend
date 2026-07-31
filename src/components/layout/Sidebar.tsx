@@ -359,12 +359,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               type="button"
               onClick={() => {
                 onClose()
-                navigate('/platform')
+                navigate('/admin')
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg border border-signal/30 text-signal-deep hover:bg-signal/10 transition-colors"
+              className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg border transition-colors ${
+                location.pathname.startsWith('/admin')
+                  ? 'border-signal/50 bg-signal/10 text-signal-deep'
+                  : 'border-signal/30 text-signal-deep hover:bg-signal/10'
+              }`}
             >
               <ShieldCheck className="w-4 h-4" />
-              Platform Yönetim Merkezi
+              Admin Paneli
             </button>
           )}
           <div className="flex items-center gap-2">

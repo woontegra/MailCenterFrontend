@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { invitesApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { APP_DISPLAY_NAME } from '../../config/app'
+import { tenantRoleLabel } from '../../utils/displayLabels'
 
 export default function InviteAccept() {
   const { token = '' } = useParams()
@@ -67,7 +68,7 @@ export default function InviteAccept() {
           <>
             <p className="text-sm text-ink-soft">
               <strong>{invite.tenant_name}</strong> ekibine{' '}
-              <strong>{invite.tenant_role}</strong> olarak davet edildiniz.
+              <strong>{tenantRoleLabel(invite.tenant_role)}</strong> olarak davet edildiniz.
             </p>
             <input
               className="w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"

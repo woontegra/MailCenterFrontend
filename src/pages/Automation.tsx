@@ -1816,7 +1816,7 @@ function ActionConfigFields({
         )}
         {action.actionType === 'SEND_WHATSAPP' && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-            WhatsApp için OPTED_IN tercihi ve APPROVED şablon zorunludur. Uygun değilse aksiyon
+            WhatsApp için açık rıza tercihi ve onaylı şablon zorunludur. Uygun değilse aksiyon
             atlanır.
           </p>
         )}
@@ -1914,7 +1914,12 @@ function ActionConfigFields({
         >
           {['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {{
+                OPEN: 'Açık',
+                PENDING: 'Bekliyor',
+                RESOLVED: 'Çözüldü',
+                CLOSED: 'Kapalı',
+              }[s] || s}
             </option>
           ))}
         </select>
@@ -1933,7 +1938,12 @@ function ActionConfigFields({
         >
           {['LOW', 'NORMAL', 'HIGH', 'URGENT'].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {{
+                LOW: 'Düşük',
+                NORMAL: 'Normal',
+                HIGH: 'Yüksek',
+                URGENT: 'Acil',
+              }[s] || s}
             </option>
           ))}
         </select>
@@ -2108,7 +2118,7 @@ function TemplateSelect({
   return (
     <div>
       <label className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">
-        Şablon{whatsapp ? ' (APPROVED)' : ''}
+        Şablon{whatsapp ? ' (onaylı)' : ''}
       </label>
       {list.length > 0 ? (
         <select
@@ -2120,7 +2130,6 @@ function TemplateSelect({
           {list.map((t: any) => (
             <option key={t.id} value={t.id}>
               {t.name}
-              {whatsapp && t.provider_approval_status ? ` [${t.provider_approval_status}]` : ''}
             </option>
           ))}
         </select>

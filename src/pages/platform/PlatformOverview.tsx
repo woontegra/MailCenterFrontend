@@ -21,7 +21,7 @@ export default function PlatformOverview() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ['Aktif tenant', data?.activeTenants],
+          ['Aktif firma', data?.activeTenants],
           ['Deneme', data?.trialTenants],
           ['Askıda', data?.suspendedTenants],
           ['Başarısız outbound %', data?.outboundFailureRate],
@@ -65,7 +65,7 @@ export default function PlatformOverview() {
       </div>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-        <h2 className="text-sm font-medium mb-3">Yeni tenantlar</h2>
+        <h2 className="text-sm font-medium mb-3">Yeni firmalar</h2>
         <ul className="divide-y divide-white/10">
           {(data?.recentTenants || []).map((t: any) => (
             <li key={t.id} className="py-2 flex justify-between text-sm">
