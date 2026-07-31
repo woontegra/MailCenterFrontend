@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -11,10 +11,18 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Smartphone,
   Unplug,
 } from 'lucide-react'
 import { brandApi, channelConnectionApi, templateApi } from '../services/api'
 import { channelSetupApiError } from '../utils/channelSetupErrors'
+import {
+  buildEmbeddedSignupLoginOptions,
+  EmbeddedSignupMode,
+  isTrustedMetaOrigin,
+  parseWaEmbeddedSignupMessage,
+  ParsedWaEmbeddedSignupEvent,
+} from '../utils/metaEmbeddedSignup'
 
 declare global {
   interface Window {
@@ -72,11 +80,14 @@ export default function ChannelWhatsAppSetup() {
   const [sdkReady, setSdkReady] = useState(false)
   const [sdkLoading, setSdkLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
-  const [sessionInfo, setSessionInfo] = useState<Record<string, unknown> | null>(null)
+  const [activeMode, setActiveMode] = useState<EmbeddedSignupMode | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [testPhone, setTestPhone] = useState('')
   const [testTemplateId, setTestTemplateId] = useState('')
   const [testingMsg, setTestingMsg] = useState(false)
+
+  const sessionRef = useRef<ParsedWaEmbeddedSignupEvent | null>(null)
+  const completingRef = useRef(false)
 
   // Advanced manual form
   const [manual, setManual] = useState({
@@ -138,14 +149,35 @@ export default function ChannelWhatsAppSetup() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (!event.origin.includes('facebook.com')) return
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-        if (data?.type === 'WA_EMBEDDED_SIGNUP') {
-          setSessionInfo(data)
-        }
-      } catch {
-        /* ignore */
+      if (!isTrustedMetaOrigin(event.origin)) return
+      const parsed = parseWaEmbeddedSignupMessage(event.data)
+      if (!parsed) return
+
+      if (parsed.isCancel) {
+        setConnecting(false)
+        completingRef.current = false
+        setInfo('Bağlantı iptal edildi. Kanal kaydı oluşturulmadı.')
+        setError('')
+        return
+      }
+      if (parsed.isError) {
+        setConnecting(false)
+        completingRef.current = false
+        const detail = String(
+          (parsed.data as any)?.error_message ||
+            (parsed.data as any)?.message ||
+            ''
+        ).slice(0, 180)
+        setError(
+          detail
+            ? `Meta Embedded Signup hatası: ${detail}`
+            : 'Meta Embedded Signup sırasında bir hata oluştu'
+        )
+        setInfo('')
+        return
+      }
+      if (parsed.isFinish) {
+        sessionRef.current = parsed
       }
     }
     window.addEventListener('message', onMessage)
@@ -182,9 +214,15 @@ export default function ChannelWhatsAppSetup() {
       brandId: number
       authorizationCode: string
       sessionInfo?: Record<string, unknown> | null
+      onboardingMode: EmbeddedSignupMode
     }) => channelConnectionApi.completeEmbeddedSignup(payload),
-    onSuccess: async () => {
-      setInfo('WhatsApp Embedded Signup tamamlandı. Bağlantı aktif.')
+    onSuccess: async (res) => {
+      const mode = res.data?.connectionType || activeMode
+      setInfo(
+        mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' || mode === 'COEXISTENCE'
+          ? 'WhatsApp Business numarası MailCenter’a bağlandı (uygulama silinmedi).'
+          : 'WhatsApp Embedded Signup tamamlandı. Bağlantı aktif.'
+      )
       setError('')
       queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
       await refetchConnections()
@@ -195,65 +233,104 @@ export default function ChannelWhatsAppSetup() {
     },
   })
 
-  const launchEmbeddedSignup = useCallback(() => {
-    setError('')
-    setInfo('')
-    if (!frontendMetaReady || !setupStatus?.embeddedSignupReady) {
-      setError('Meta WhatsApp yapılandırması tamamlanmamış')
-      return
+  const waitForFinishSession = useCallback(async (timeoutMs = 4000) => {
+    const started = Date.now()
+    while (Date.now() - started < timeoutMs) {
+      if (sessionRef.current?.isFinish) return sessionRef.current
+      await new Promise((r) => setTimeout(r, 100))
     }
-    if (!brandId) {
-      setError('Önce marka seçin')
-      return
-    }
-    if (!window.FB || !sdkReady) {
-      setError('Facebook SDK henüz hazır değil')
-      return
-    }
+    return sessionRef.current
+  }, [])
 
-    setConnecting(true)
-    window.FB.login(
-      (response: any) => {
-        const code = response?.authResponse?.code
-        if (!code) {
-          setConnecting(false)
-          if (response?.status === 'unknown' || !response?.authResponse) {
-            setInfo('Bağlantı iptal edildi. Kayıt oluşturulmadı.')
-          } else {
-            setError('Meta yetkilendirme kodu alınamadı')
-          }
-          return
-        }
-        completeMutation.mutate(
-          {
-            brandId: Number(brandId),
-            authorizationCode: code,
-            sessionInfo,
-          },
-          {
-            onSettled: () => setConnecting(false),
-          }
-        )
-      },
-      {
-        config_id: META_CONFIG_ID,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: '',
-          sessionInfoVersion: '3',
-        },
+  const launchEmbeddedSignup = useCallback(
+    (mode: EmbeddedSignupMode) => {
+      setError('')
+      setInfo('')
+      if (!frontendMetaReady || !setupStatus?.embeddedSignupReady) {
+        setError('Meta WhatsApp yapılandırması tamamlanmamış')
+        return
       }
-    )
-  }, [
-    brandId,
-    completeMutation,
-    frontendMetaReady,
-    sdkReady,
-    sessionInfo,
-    setupStatus?.embeddedSignupReady,
-  ])
+      if (!brandId) {
+        setError('Önce marka seçin')
+        return
+      }
+      if (!window.FB || !sdkReady) {
+        setError('Facebook SDK henüz hazır değil')
+        return
+      }
+      if (connecting || completeMutation.isPending || completingRef.current) {
+        return
+      }
+
+      sessionRef.current = null
+      setActiveMode(mode)
+      setConnecting(true)
+
+      const loginOptions = buildEmbeddedSignupLoginOptions({
+        configId: META_CONFIG_ID,
+        mode,
+      })
+
+      window.FB.login(async (response: any) => {
+        try {
+          const code = response?.authResponse?.code
+          if (!code) {
+            setConnecting(false)
+            if (response?.status === 'unknown' || !response?.authResponse) {
+              setInfo('Bağlantı iptal edildi. Kayıt oluşturulmadı.')
+            } else {
+              setError('Meta yetkilendirme kodu alınamadı')
+            }
+            return
+          }
+
+          if (completingRef.current) {
+            return
+          }
+          completingRef.current = true
+
+          const finished = await waitForFinishSession()
+          const sessionInfo = finished
+            ? {
+                ...finished.raw,
+                waba_id: finished.wabaId,
+                phone_number_id: finished.phoneNumberId,
+                business_id: finished.businessId,
+                event: finished.event,
+              }
+            : null
+
+          completeMutation.mutate(
+            {
+              brandId: Number(brandId),
+              authorizationCode: code,
+              sessionInfo,
+              onboardingMode: mode,
+            },
+            {
+              onSettled: () => {
+                setConnecting(false)
+                completingRef.current = false
+              },
+            }
+          )
+        } catch {
+          setConnecting(false)
+          completingRef.current = false
+          setError('Embedded Signup tamamlanamadı')
+        }
+      }, loginOptions)
+    },
+    [
+      brandId,
+      completeMutation,
+      connecting,
+      frontendMetaReady,
+      sdkReady,
+      setupStatus?.embeddedSignupReady,
+      waitForFinishSession,
+    ]
+  )
 
   const verifyMutation = useMutation({
     mutationFn: () => channelConnectionApi.verifyWhatsApp(connection!.id),
@@ -366,6 +443,21 @@ export default function ChannelWhatsAppSetup() {
       setError('Webhook URL kopyalanamadı')
     }
   }
+
+  const metaButtonsDisabled =
+    connecting ||
+    completeMutation.isPending ||
+    sdkLoading ||
+    !setupStatus?.embeddedSignupReady ||
+    !frontendMetaReady ||
+    !brandId
+
+  const connectionTypeLabel = String(
+    connection?.settings?.connection_type || connection?.settings?.connection_method || ''
+  )
+  const isCoexistence =
+    connectionTypeLabel === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ||
+    connectionTypeLabel === 'COEXISTENCE'
 
   const statusRows = [
     { label: 'App ID mevcut', ok: Boolean(setupStatus?.appIdPresent && META_APP_ID) },
@@ -488,26 +580,46 @@ export default function ChannelWhatsAppSetup() {
           </select>
         </label>
 
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-3 space-y-2">
+          <p className="text-sm text-emerald-900 font-medium flex items-center gap-2">
+            <Smartphone className="w-4 h-4 shrink-0" />
+            Mevcut WhatsApp Business numaranızı uygulamadan silmeden MailCenter’a
+            bağlayabilirsiniz.
+          </p>
+          <p className="text-xs text-emerald-900/80">
+            Örn. +90 532 317 17 55 — Meta ekranında WhatsApp Business uygulamasındaki
+            numarayı seçin. Numara uygulamadan silinmez; Cloud API ile birlikte (coexistence)
+            çalışır.
+          </p>
+        </div>
+
         <button
           type="button"
-          disabled={
-            connecting ||
-            completeMutation.isPending ||
-            sdkLoading ||
-            !setupStatus?.embeddedSignupReady ||
-            !frontendMetaReady ||
-            !brandId
-          }
-          onClick={launchEmbeddedSignup}
+          disabled={metaButtonsDisabled}
+          onClick={() => launchEmbeddedSignup('WHATSAPP_BUSINESS_APP_ONBOARDING')}
           className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1877F2] text-white text-sm font-semibold disabled:opacity-50"
         >
-          {connecting || completeMutation.isPending ? (
+          {connecting && activeMode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : null}
-          Meta ile WhatsApp Bağla
+          Mevcut WhatsApp Business numarasını bağla
         </button>
+
+        <button
+          type="button"
+          disabled={metaButtonsDisabled}
+          onClick={() => launchEmbeddedSignup('STANDARD')}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-[#1877F2] text-[#1877F2] bg-white text-sm font-semibold disabled:opacity-50"
+        >
+          {connecting && activeMode === 'STANDARD' ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : null}
+          Yeni bir numara bağla
+        </button>
+
         <p className="text-xs text-ink-faint">
-          Kullanıcı iptal ederse kanal kaydı oluşturulmaz. App secret frontend’e gönderilmez.
+          Kullanıcı iptal ederse kanal kaydı oluşturulmaz. Authorization code yalnızca bir kez
+          backend’e gönderilir; access token frontend’de saklanmaz.
         </p>
       </section>
 
@@ -526,6 +638,7 @@ export default function ChannelWhatsAppSetup() {
                 Durum: {connection.status} · Webhook:{' '}
                 {connection.settings?.webhook_status || '—'} · Onaylı şablon:{' '}
                 {connection.settings?.approved_template_count ?? approvedTemplates.length}
+                {isCoexistence ? ' · Tür: WhatsApp Business App (coexistence)' : ''}
               </p>
             </div>
             {connection.status === 'ACTIVE' && (

@@ -110,6 +110,7 @@ export const channelConnectionApi = {
     brandId: number
     authorizationCode: string
     sessionInfo?: Record<string, unknown> | null
+    onboardingMode?: 'WHATSAPP_BUSINESS_APP_ONBOARDING' | 'STANDARD'
   }) => api.post('/channel-connections/whatsapp/embedded-signup/complete', data),
   syncWhatsAppTemplates: (id: number) =>
     api.post(`/channel-connections/${id}/whatsapp/sync-templates`),

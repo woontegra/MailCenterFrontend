@@ -337,6 +337,10 @@ export default function Channels() {
                     </div>
                     <StatusBadge status={channelStatus(whatsapp.connection)} />
                   </div>
+                  <p className="text-xs text-ink-soft mb-3 leading-relaxed">
+                    Mevcut WhatsApp Business numaranızı uygulamadan silmeden MailCenter’a
+                    bağlayabilirsiniz.
+                  </p>
                   <ul className="text-sm text-ink-soft space-y-1.5 flex-1">
                     <li>
                       İşletme:{' '}
