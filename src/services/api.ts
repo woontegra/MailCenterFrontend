@@ -114,6 +114,8 @@ export const channelConnectionApi = {
   }) => api.post('/channel-connections/whatsapp/embedded-signup/complete', data),
   syncWhatsAppTemplates: (id: number) =>
     api.post(`/channel-connections/${id}/whatsapp/sync-templates`),
+  ensureWhatsAppSender: (id: number) =>
+    api.post(`/channel-connections/${id}/ensure-whatsapp-sender`),
   verifyWhatsApp: (id: number) => api.post(`/channel-connections/${id}/whatsapp/verify`),
   disconnectWhatsApp: (id: number) =>
     api.post(`/channel-connections/${id}/whatsapp/disconnect`),

@@ -2,18 +2,48 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Cable, MessageCircle, Send } from 'lucide-react'
-import {
-  brandApi,
-  channelConnectionApi,
-  contactApi,
-  senderIdentityApi,
-  templateApi,
-  whatsappApi,
-} from '../services/api'
+import { brandApi, channelConnectionApi, contactApi, templateApi, whatsappApi } from '../services/api'
 import { APP_DISPLAY_NAME } from '../config/app'
 
 function newIdempotencyKey() {
   return `wa_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function connectionSettings(c: any): Record<string, any> {
+  const s = c?.settings
+  return s && typeof s === 'object' && !Array.isArray(s) ? s : {}
+}
+
+function whatsappChannelLabel(c: any): string {
+  const settings = connectionSettings(c)
+  const title =
+    settings.verified_name || c?.display_name || settings.waba_name || 'WhatsApp'
+  const phone =
+    settings.business_phone_number || settings.business_phone || c?.business_phone || '—'
+  return `${title} — ${phone}`
+}
+
+function businessPhoneOf(c: any): string {
+  const settings = connectionSettings(c)
+  return String(settings.business_phone_number || settings.business_phone || '').trim()
+}
+
+function phoneNumberIdOf(c: any): string {
+  const settings = connectionSettings(c)
+  return String(settings.phone_number_id || '').trim()
+}
+
+function templateOptionLabel(t: any): string {
+  const lang = String(t.provider_template_language || '').trim()
+  const providerName = String(t.provider_template_name || '').trim()
+  if (providerName) {
+    return lang ? `${providerName} (${lang})` : providerName
+  }
+  const name = String(t.name || '').trim() || 'Şablon'
+  // Avoid "hello_world (en_US) (en_US)" when sync already baked language into name
+  if (lang && name.endsWith(`(${lang})`)) return name
+  if (lang && !name.includes(`(${lang})`)) return `${name} (${lang})`
+  return name
 }
 
 export default function ComposeWhatsApp() {
@@ -21,7 +51,13 @@ export default function ComposeWhatsApp() {
   const idempotencyRef = useRef(newIdempotencyKey())
 
   const [brandId, setBrandId] = useState('')
+  const [channelConnectionId, setChannelConnectionId] = useState('')
   const [senderIdentityId, setSenderIdentityId] = useState('')
+  const [senderPhone, setSenderPhone] = useState('')
+  const [phoneNumberId, setPhoneNumberId] = useState('')
+  const [senderError, setSenderError] = useState('')
+  const [ensuringSender, setEnsuringSender] = useState(false)
+
   const [messageMode, setMessageMode] = useState<'TEMPLATE' | 'TEXT'>('TEMPLATE')
   const [templateId, setTemplateId] = useState('')
   const [contactId, setContactId] = useState('')
@@ -41,33 +77,32 @@ export default function ComposeWhatsApp() {
     },
   })
 
-  const { data: waConnections = [], isLoading: connectionsLoading } = useQuery({
-    queryKey: ['channel-connections', 'WHATSAPP'],
+  const {
+    data: brandWaChannels = [],
+    isLoading: channelsLoading,
+    isError: channelsError,
+    error: channelsErr,
+  } = useQuery({
+    queryKey: ['channel-connections', 'WHATSAPP', brandId],
+    enabled: Boolean(brandId),
     queryFn: async () => {
-      const res = await channelConnectionApi.list({ channel_type: 'WHATSAPP' })
-      const rows = Array.isArray(res.data) ? res.data : []
-      return rows.filter((c: any) => c.status === 'ACTIVE')
-    },
-  })
-
-  const hasActiveWaChannel = waConnections.length > 0
-
-  const { data: senders = [] } = useQuery({
-    queryKey: ['sender-identities-wa', brandId],
-    enabled: Boolean(brandId) && hasActiveWaChannel,
-    queryFn: async () => {
-      const res = await senderIdentityApi.list({
-        brand_id: brandId,
+      const res = await channelConnectionApi.list({
         channel_type: 'WHATSAPP',
+        brand_id: brandId,
       })
       const rows = Array.isArray(res.data) ? res.data : []
-      return rows.filter((s: any) => s.is_active !== false && s.is_verified !== false)
+      return rows.filter((c: any) => String(c.status || '').toUpperCase() === 'ACTIVE')
     },
   })
 
+  const selectedChannel = useMemo(
+    () => brandWaChannels.find((c: any) => String(c.id) === String(channelConnectionId)),
+    [brandWaChannels, channelConnectionId]
+  )
+
   const { data: templates = [] } = useQuery({
-    queryKey: ['templates-wa', brandId],
-    enabled: Boolean(brandId),
+    queryKey: ['templates-wa', brandId, channelConnectionId],
+    enabled: Boolean(brandId) && Boolean(channelConnectionId),
     queryFn: async () => {
       const res = await templateApi.list({ brand_id: brandId, channel_type: 'WHATSAPP' })
       const rows = Array.isArray(res.data?.data) ? res.data.data : []
@@ -108,10 +143,106 @@ export default function ComposeWhatsApp() {
     if (primaryPhone?.value) setRecipient(primaryPhone.value)
   }, [primaryPhone])
 
+  // Reset dependent state when brand changes
+  useEffect(() => {
+    setChannelConnectionId('')
+    setSenderIdentityId('')
+    setSenderPhone('')
+    setPhoneNumberId('')
+    setSenderError('')
+    setTemplateId('')
+    setMessageContent('')
+    setVariables({})
+    setDeclaredVars([])
+    setError('')
+    setNotice('')
+  }, [brandId])
+
+  // Auto-select single ACTIVE channel; clear stale selection
+  useEffect(() => {
+    if (!brandId) return
+    if (channelsLoading) return
+
+    if (brandWaChannels.length === 0) {
+      setChannelConnectionId('')
+      setSenderIdentityId('')
+      setSenderPhone('')
+      setPhoneNumberId('')
+      setSenderError('Bu marka için aktif WhatsApp göndericisi bulunamadı.')
+      return
+    }
+
+    setSenderError('')
+    const stillValid = brandWaChannels.some(
+      (c: any) => String(c.id) === String(channelConnectionId)
+    )
+    if (!stillValid) {
+      if (brandWaChannels.length === 1) {
+        setChannelConnectionId(String(brandWaChannels[0].id))
+      } else if (channelConnectionId) {
+        setChannelConnectionId('')
+        setSenderIdentityId('')
+        setSenderPhone('')
+        setPhoneNumberId('')
+      }
+    }
+  }, [brandId, brandWaChannels, channelsLoading, channelConnectionId])
+
+  // When channel selected: fill phone / phone_number_id and ensure sender identity
+  useEffect(() => {
+    if (!channelConnectionId || !selectedChannel) {
+      if (!channelConnectionId) {
+        setSenderIdentityId('')
+        setSenderPhone('')
+        setPhoneNumberId('')
+      }
+      return
+    }
+
+    const phone = businessPhoneOf(selectedChannel)
+    const pnid = phoneNumberIdOf(selectedChannel)
+    setSenderPhone(phone)
+    setPhoneNumberId(pnid)
+
+    let cancelled = false
+    const run = async () => {
+      setEnsuringSender(true)
+      setSenderError('')
+      try {
+        const res = await channelConnectionApi.ensureWhatsAppSender(Number(channelConnectionId))
+        const data = res.data?.data
+        if (cancelled) return
+        if (!data?.sender_identity_id) {
+          setSenderIdentityId('')
+          setSenderError('Bu marka için aktif WhatsApp göndericisi bulunamadı.')
+          return
+        }
+        setSenderIdentityId(String(data.sender_identity_id))
+        if (data.business_phone) setSenderPhone(String(data.business_phone))
+        if (data.phone_number_id) setPhoneNumberId(String(data.phone_number_id))
+      } catch (err: any) {
+        if (cancelled) return
+        setSenderIdentityId('')
+        setSenderError(
+          err.response?.data?.error || 'Bu marka için aktif WhatsApp göndericisi bulunamadı.'
+        )
+      } finally {
+        if (!cancelled) setEnsuringSender(false)
+      }
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [channelConnectionId, selectedChannel])
+
   useEffect(() => {
     if (!templateId) return
     const tpl = templates.find((t: any) => String(t.id) === String(templateId))
-    if (!tpl) return
+    if (!tpl) {
+      setTemplateId('')
+      return
+    }
     setMessageContent(tpl.plain_text_content || tpl.content || tpl.provider_template_name || '')
     const vars = Array.isArray(tpl.variables)
       ? tpl.variables.map((v: any) => (typeof v === 'string' ? v : v?.name)).filter(Boolean)
@@ -134,7 +265,9 @@ export default function ComposeWhatsApp() {
       recipient,
       brandId,
       senderIdentityId,
+      channelConnectionId,
     ],
+    enabled: Boolean(senderIdentityId),
     queryFn: async () => {
       const res = await whatsappApi.preview({
         messageMode,
@@ -144,6 +277,7 @@ export default function ComposeWhatsApp() {
         recipient: recipient || undefined,
         brandId: brandId ? Number(brandId) : undefined,
         senderIdentityId: senderIdentityId ? Number(senderIdentityId) : undefined,
+        channelConnectionId: channelConnectionId ? Number(channelConnectionId) : undefined,
       })
       return res.data?.data
     },
@@ -152,18 +286,30 @@ export default function ComposeWhatsApp() {
   const preview = previewQuery.data
   const canQueue = Boolean(
     brandId &&
+      channelConnectionId &&
       senderIdentityId &&
       recipient &&
       preview?.canSend &&
       (messageMode === 'TEMPLATE' ? templateId : messageContent.trim())
   )
 
+  const onBrandChange = (value: string) => {
+    setBrandId(value)
+  }
+
+  const onChannelChange = (value: string) => {
+    setChannelConnectionId(value)
+    setTemplateId('')
+    setSenderIdentityId('')
+    setSenderError('')
+  }
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setNotice('')
     if (!canQueue) {
-      setError(preview?.blockReason || 'Gönderim uygun değil')
+      setError(preview?.blockReason || senderError || 'Gönderim uygun değil')
       return
     }
     setSending(true)
@@ -171,6 +317,7 @@ export default function ComposeWhatsApp() {
       const res = await whatsappApi.send({
         brandId: Number(brandId),
         senderIdentityId: Number(senderIdentityId),
+        channelConnectionId: Number(channelConnectionId),
         recipient,
         contactPointId: primaryPhone?.id,
         messageMode,
@@ -203,7 +350,9 @@ export default function ComposeWhatsApp() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{error}</div>
+        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+          {error}
+        </div>
       )}
       {notice && (
         <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">
@@ -211,23 +360,6 @@ export default function ComposeWhatsApp() {
         </div>
       )}
 
-      {!connectionsLoading && !hasActiveWaChannel ? (
-        <div className="mc-panel mc-panel-asymmetric p-10 text-center max-w-lg mx-auto">
-          <MessageCircle className="w-10 h-10 text-ink-faint mx-auto mb-3" />
-          <p className="text-ink font-medium text-lg">Henüz aktif bir WhatsApp kanalınız bulunmuyor.</p>
-          <p className="text-sm text-ink-soft mt-2 mb-5">
-            Gönderim yapmadan önce Kanal Bağlantıları üzerinden WhatsApp kanalını bağlayın.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate('/channels/whatsapp/setup')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-signal text-white text-sm font-medium"
-          >
-            <Cable className="w-4 h-4" />
-            WhatsApp Kanalını Bağla
-          </button>
-        </div>
-      ) : (
       <form onSubmit={onSubmit} className="grid gap-4 lg:grid-cols-[1fr_18rem]">
         <div className="mc-panel mc-panel-asymmetric p-5 space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
@@ -236,11 +368,7 @@ export default function ComposeWhatsApp() {
               <select
                 className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
                 value={brandId}
-                onChange={(e) => {
-                  setBrandId(e.target.value)
-                  setSenderIdentityId('')
-                  setTemplateId('')
-                }}
+                onChange={(e) => onBrandChange(e.target.value)}
                 required
               >
                 <option value="">Seçin</option>
@@ -252,26 +380,78 @@ export default function ComposeWhatsApp() {
               </select>
             </label>
             <label className="block text-sm">
-              <span className="text-xs text-ink-faint uppercase tracking-wide">WhatsApp gönderen</span>
+              <span className="text-xs text-ink-faint uppercase tracking-wide">WhatsApp Gönderen</span>
               <select
                 className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
-                value={senderIdentityId}
-                onChange={(e) => setSenderIdentityId(e.target.value)}
+                value={channelConnectionId}
+                onChange={(e) => onChannelChange(e.target.value)}
                 required
-                disabled={!brandId}
+                disabled={!brandId || channelsLoading || ensuringSender}
               >
                 <option value="">Seçin</option>
-                {senders.map((s: any) => (
-                  <option key={s.id} value={s.id}>
-                    {s.display_name || s.sender_value}
+                {brandWaChannels.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {whatsappChannelLabel(c)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
+          {brandId && !channelsLoading && brandWaChannels.length === 0 && (
+            <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 space-y-2">
+              <p>
+                {channelsError
+                  ? (channelsErr as any)?.response?.data?.error ||
+                    'Gönderici listesi yüklenemedi.'
+                  : 'Bu marka için aktif WhatsApp göndericisi bulunamadı.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/channels/whatsapp/setup')}
+                className="inline-flex items-center gap-1.5 text-signal-deep underline text-sm"
+              >
+                <Cable className="w-3.5 h-3.5" />
+                WhatsApp kanalını bağla
+              </button>
+            </div>
+          )}
+
+          {senderError && brandWaChannels.length > 0 && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              {senderError}
+            </p>
+          )}
+
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block text-sm">
+              <span className="text-xs text-ink-faint uppercase tracking-wide">Gönderen telefon</span>
+              <input
+                className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+                value={senderPhone}
+                readOnly
+                placeholder={channelConnectionId ? '—' : 'Önce gönderen seçin'}
+              />
+              {phoneNumberId ? (
+                <span className="text-[11px] text-ink-faint mt-1 block">
+                  Phone Number ID: {phoneNumberId}
+                </span>
+              ) : null}
+            </label>
+            <label className="block text-sm">
+              <span className="text-xs text-ink-faint uppercase tracking-wide">Alıcı telefon</span>
+              <input
+                className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+                placeholder="+905..."
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm md:col-span-2">
               <span className="text-xs text-ink-faint uppercase tracking-wide">Kişi</span>
               <select
                 className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
@@ -285,16 +465,6 @@ export default function ComposeWhatsApp() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-xs text-ink-faint uppercase tracking-wide">Telefon</span>
-              <input
-                className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
-                placeholder="+905..."
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                required
-              />
             </label>
           </div>
 
@@ -328,16 +498,19 @@ export default function ComposeWhatsApp() {
                   value={templateId}
                   onChange={(e) => setTemplateId(e.target.value)}
                   required
+                  disabled={!channelConnectionId}
                 >
-                  <option value="">Seçin</option>
+                  <option value="">
+                    {channelConnectionId ? 'Seçin' : 'Önce gönderen seçin'}
+                  </option>
                   {templates.map((t: any) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} ({t.provider_template_language || '—'})
+                      {templateOptionLabel(t)}
                     </option>
                   ))}
                 </select>
               </label>
-              {templates.length === 0 && (
+              {channelConnectionId && templates.length === 0 && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                   Onaylı WhatsApp şablonu yok. Meta’da onaylı şablon bağlayın; sahte şablon gösterilmez.
                 </p>
@@ -361,13 +534,14 @@ export default function ComposeWhatsApp() {
                 value={messageContent}
                 onChange={(e) => setMessageContent(e.target.value)}
                 required
+                disabled={!channelConnectionId}
               />
             </label>
           )}
 
           <button
             type="submit"
-            disabled={!canQueue || sending}
+            disabled={!canQueue || sending || ensuringSender}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dock text-white text-sm disabled:opacity-40"
           >
             <Send className="w-4 h-4" />
@@ -404,12 +578,13 @@ export default function ComposeWhatsApp() {
               <p className="text-ink-soft">Numara girildiğinde kontrol edilir</p>
             )}
             {messageMode === 'TEXT' && preview?.serviceWindow && (
-              <p className="text-xs text-ink-soft mt-2">{preview.serviceWindow.reason || 'Pencere açık'}</p>
+              <p className="text-xs text-ink-soft mt-2">
+                {preview.serviceWindow.reason || 'Pencere açık'}
+              </p>
             )}
           </div>
         </aside>
       </form>
-      )}
     </div>
   )
 }
