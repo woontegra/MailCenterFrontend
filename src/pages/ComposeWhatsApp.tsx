@@ -462,6 +462,22 @@ export default function ComposeWhatsApp() {
                 {contacts.map((c: any) => (
                   <option key={c.id} value={c.id}>
                     {c.display_name}
+                    {(() => {
+                      const waPref =
+                        (c.preferences || []).find(
+                          (p: any) =>
+                            String(p.channel_type).toUpperCase() === 'WHATSAPP' &&
+                            (p.brand_id == null || String(p.brand_id) === String(brandId))
+                        ) ||
+                        (c.preferences || []).find(
+                          (p: any) => String(p.channel_type).toUpperCase() === 'WHATSAPP'
+                        )
+                      const st = String(waPref?.status || 'UNKNOWN').toUpperCase()
+                      if (st === 'OPTED_IN') return ' · İzinli'
+                      if (st === 'OPTED_OUT') return ' · Red'
+                      if (st === 'BLOCKED') return ' · Engelli'
+                      return ' · Bilinmiyor'
+                    })()}
                   </option>
                 ))}
               </select>
@@ -572,7 +588,14 @@ export default function ComposeWhatsApp() {
             <p className="text-xs uppercase tracking-wide text-ink-faint mb-1">İzin</p>
             {preview?.preference ? (
               <p className={preview.preference.eligible ? 'text-emerald-700' : 'text-red-600'}>
-                {preview.preference.status}
+                {(() => {
+                  const st = String(preview.preference.status || '').toUpperCase()
+                  if (st === 'OPTED_IN') return 'İzinli (OPTED_IN)'
+                  if (st === 'OPTED_OUT') return 'Red (OPTED_OUT)'
+                  if (st === 'BLOCKED') return 'Engelli (BLOCKED)'
+                  if (st === 'UNKNOWN') return 'Bilinmiyor (UNKNOWN)'
+                  return preview.preference.status
+                })()}
               </p>
             ) : (
               <p className="text-ink-soft">Numara girildiğinde kontrol edilir</p>

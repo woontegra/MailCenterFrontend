@@ -50,7 +50,37 @@ function primaryPoint(points: any[], channel: string) {
 }
 
 function friendlyError(err: any) {
-  return err?.response?.data?.error || 'İşlem tamamlanamadı'
+  const status = err?.response?.status
+  const msg = String(err?.response?.data?.error || '').trim()
+  if (msg) return msg
+  if (status === 409) return 'Bu telefon numarası zaten kayıtlı.'
+  if (status === 404) return 'Bu marka bulunamadı.'
+  if (status === 400) return 'İstek geçersiz. Lütfen alanları kontrol edin.'
+  return 'İşlem tamamlanamadı'
+}
+
+/** Build canonical E.164 from UI country code + national number. */
+function toE164Phone(phone: string, countryCode: string): string | null {
+  let raw = String(phone || '').trim().replace(/[\s().-]/g, '')
+  if (!raw) return null
+  if (raw.startsWith('00')) raw = `+${raw.slice(2)}`
+  if (raw.startsWith('+')) {
+    const digits = raw.slice(1).replace(/\D/g, '')
+    if (digits.length < 8 || digits.length > 15) return null
+    return `+${digits}`
+  }
+  const cc = String(countryCode || '').replace(/\D/g, '')
+  let local = raw.replace(/\D/g, '')
+  if (!local) return null
+  if (local.startsWith('0')) local = local.slice(1)
+  if (cc && local.startsWith(cc) && local.length > cc.length) {
+    const without = local.slice(cc.length)
+    if (without.length >= 7) local = without
+  }
+  if (!cc) return null
+  const combined = `${cc}${local}`
+  if (combined.length < 8 || combined.length > 15) return null
+  return `+${combined}`
 }
 
 export default function Contacts() {
@@ -71,8 +101,9 @@ export default function Contacts() {
     title: '',
     email: '',
     phone: '',
-    country_code: '',
+    country_code: '90',
     brand_ids: [] as number[],
+    whatsapp_opt_in: false,
   })
   const [prefDraft, setPrefDraft] = useState<Record<string, string>>({})
   const [pointForm, setPointForm] = useState({
@@ -166,26 +197,39 @@ export default function Contacts() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const points: any[] = []
-      if (createForm.email.trim()) {
-        points.push({ channel_type: 'EMAIL', value: createForm.email.trim(), is_primary: true })
-      }
-      if (createForm.phone.trim()) {
-        points.push({
-          channel_type: 'SMS',
-          value: createForm.phone.trim(),
-          is_primary: true,
-          country_code: createForm.country_code || undefined,
+      if (!createForm.brand_ids.length) {
+        throw Object.assign(new Error('Bu marka bulunamadı.'), {
+          response: { status: 400, data: { error: 'En az bir marka seçin.' } },
         })
       }
+
+      const points: any[] = []
+      const email = createForm.email.trim()
+      if (email) {
+        points.push({ channel_type: 'EMAIL', value: email, is_primary: true })
+      }
+
+      if (createForm.phone.trim()) {
+        const e164 = toE164Phone(createForm.phone, createForm.country_code)
+        if (!e164) {
+          throw Object.assign(new Error('Telefon numarası geçersiz.'), {
+            response: { status: 400, data: { error: 'Telefon numarası geçersiz.' } },
+          })
+        }
+        // SMS + WhatsApp same number so contact appears in both pickers
+        points.push({ channel_type: 'SMS', value: e164, is_primary: true })
+        points.push({ channel_type: 'WHATSAPP', value: e164, is_primary: true })
+      }
+
       return contactApi.create({
-        first_name: createForm.first_name || null,
-        last_name: createForm.last_name || null,
-        company_name: createForm.company_name || null,
-        title: createForm.title || null,
-        brand_ids: createForm.brand_ids,
+        first_name: createForm.first_name.trim() || null,
+        last_name: createForm.last_name.trim() || null,
+        company_name: createForm.company_name.trim() || null,
+        title: createForm.title.trim() || null,
+        brand_ids: createForm.brand_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0),
         contact_points: points,
-        country_code: createForm.country_code || undefined,
+        email: email || null,
+        whatsapp_opt_in: createForm.whatsapp_opt_in,
       })
     },
     onSuccess: (res) => {
@@ -198,8 +242,9 @@ export default function Contacts() {
         title: '',
         email: '',
         phone: '',
-        country_code: '',
+        country_code: '90',
         brand_ids: [],
+        whatsapp_opt_in: false,
       })
       invalidateContact()
       if (res.data?.id) setSelectedId(res.data.id)
@@ -297,7 +342,10 @@ export default function Contacts() {
         </div>
         <button
           type="button"
-          onClick={() => setShowCreate(true)}
+          onClick={() => {
+            setError('')
+            setShowCreate(true)
+          }}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl rounded-tr-sm hover:bg-dock-raised transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -788,6 +836,11 @@ export default function Contacts() {
                 <X className="w-5 h-5 text-ink-soft" />
               </button>
             </div>
+            {error && (
+              <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <input
                 className="px-3 py-2 rounded-lg border border-canvas-line text-sm"
@@ -810,7 +863,7 @@ export default function Contacts() {
             />
             <input
               className="w-full px-3 py-2 rounded-lg border border-canvas-line text-sm"
-              placeholder="E-posta"
+              placeholder="E-posta (opsiyonel)"
               value={createForm.email}
               onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
             />
@@ -820,17 +873,20 @@ export default function Contacts() {
                 placeholder="90"
                 value={createForm.country_code}
                 onChange={(e) => setCreateForm({ ...createForm, country_code: e.target.value })}
+                aria-label="Ülke kodu"
               />
               <input
                 className="px-3 py-2 rounded-lg border border-canvas-line text-sm"
-                placeholder="Telefon (+ veya ülke kodu ile)"
+                placeholder="5323171755"
                 value={createForm.phone}
                 onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                aria-label="Telefon"
               />
             </div>
             <div className="flex flex-wrap gap-2">
               {brands.map((b: any) => {
-                const on = createForm.brand_ids.includes(b.id)
+                const brandId = Number(b.id)
+                const on = createForm.brand_ids.includes(brandId)
                 return (
                   <button
                     key={b.id}
@@ -839,8 +895,8 @@ export default function Contacts() {
                       setCreateForm({
                         ...createForm,
                         brand_ids: on
-                          ? createForm.brand_ids.filter((id) => id !== b.id)
-                          : [...createForm.brand_ids, b.id],
+                          ? createForm.brand_ids.filter((id) => id !== brandId)
+                          : [...createForm.brand_ids, brandId],
                       })
                     }
                     className={`text-xs px-2 py-1 rounded-lg border ${
@@ -852,6 +908,22 @@ export default function Contacts() {
                 )
               })}
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={createForm.whatsapp_opt_in}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, whatsapp_opt_in: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium">WhatsApp izni</span>
+                <span className="block text-xs text-ink-soft mt-0.5">
+                  Varsayılan kapalı. Açık olursa kişi WhatsApp Yaz’da izinli olarak seçilebilir.
+                </span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
