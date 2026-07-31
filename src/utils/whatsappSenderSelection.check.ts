@@ -36,5 +36,12 @@ assert(
   pickDefaultWhatsAppConnection([real, { ...real, id: 100 }]) == null,
   'ambiguous reals'
 )
+assert(
+  pickDefaultWhatsAppConnection([
+    test,
+    { id: 12, phone_number: '+1 555-154-8955', phone_number_id: 'OTHER_TEST', settings: {} },
+  ])?.id === 11,
+  'test-only brand still selects a sender'
+)
 
 console.log('✓ whatsappSenderSelection checks passed')

@@ -5,7 +5,7 @@ import { Copy, Eye, Plus, Search, Trash2, Pencil } from 'lucide-react'
 import { brandApi, channelConnectionApi, senderIdentityApi, templateApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { normalizeWhatsAppTemplateName } from '../utils/whatsappTemplateName'
-import { approvalStatusLabel } from '../utils/displayLabels'
+import { approvalStatusLabel, mailCenterRecordStatusLabel, whatsappTemplateSendabilityLabel } from '../utils/displayLabels'
 
 const emptyForm = () => ({
   brand_id: '',
@@ -377,6 +377,24 @@ export default function Templates() {
                   {isWa && (
                     <ul className="mt-2 space-y-0.5 text-[11px] text-ink-soft">
                       <li>
+                        MailCenter kaydı:{' '}
+                        <span className="text-ink font-medium">
+                          {mailCenterRecordStatusLabel(tpl)}
+                        </span>
+                      </li>
+                      <li>
+                        Meta durumu:{' '}
+                        <span className="text-ink font-medium">
+                          {approvalStatusLabel(tpl.provider_approval_status)}
+                        </span>
+                      </li>
+                      <li>
+                        Kullanılabilirlik:{' '}
+                        <span className="text-ink font-medium">
+                          {whatsappTemplateSendabilityLabel(tpl)}
+                        </span>
+                      </li>
+                      <li>
                         Provider:{' '}
                         <span className="text-ink font-medium">
                           {tpl.provider_template_name || '—'}
@@ -391,12 +409,6 @@ export default function Templates() {
                       <li>
                         Kategori:{' '}
                         <span className="text-ink font-medium">{templateCategory(tpl)}</span>
-                      </li>
-                      <li>
-                        Meta durumu:{' '}
-                        <span className="text-ink font-medium">
-                          {approvalStatusLabel(tpl.provider_approval_status)}
-                        </span>
                       </li>
                       <li>
                         Meta ID:{' '}

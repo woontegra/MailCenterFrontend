@@ -32,19 +32,18 @@ export function connectionPhoneNumberId(c: any): string {
 }
 
 /**
- * Prefer a single real ACTIVE sender; never stick to Meta test line when a real number exists.
+ * Prefer a single real ACTIVE sender when present.
+ * If only Meta test / review senders exist, still pick one so App Review can send.
  */
 export function pickDefaultWhatsAppConnection(channels: any[]): any | null {
   const list = Array.isArray(channels) ? channels : []
   if (list.length === 0) return null
   if (list.length === 1) return list[0]
-  const real = list.filter((c) => {
-    const phone = connectionPhone(c)
-    const pnid = connectionPhoneNumberId(c)
-    if (!pnid) return false
-    return !isMetaTestWhatsAppPhone(phone)
-  })
+  const withPnid = list.filter((c) => Boolean(connectionPhoneNumberId(c)))
+  const pool = withPnid.length ? withPnid : list
+  const real = pool.filter((c) => !isMetaTestWhatsAppPhone(connectionPhone(c)))
   if (real.length === 1) return real[0]
   if (real.length > 1) return null
-  return null
+  // No real sender — Meta Review / test-only brand: use first compose-ready channel
+  return pool[0] || null
 }

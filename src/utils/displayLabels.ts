@@ -46,7 +46,7 @@ export function inviteStatusLabel(code: string | null | undefined): string {
 }
 
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Bekliyor',
+  PENDING: 'Onay bekliyor',
   APPROVED: 'Onaylandı',
   REJECTED: 'Reddedildi',
   PAUSED: 'Duraklatıldı',
@@ -54,8 +54,32 @@ export const APPROVAL_STATUS_LABELS: Record<string, string> = {
 }
 
 export function approvalStatusLabel(code: string | null | undefined): string {
-  if (!code) return 'Bekliyor'
+  if (!code) return 'Onay bekliyor'
   return APPROVAL_STATUS_LABELS[String(code).toUpperCase()] || String(code)
+}
+
+/** WhatsApp template send eligibility for template cards. */
+export function whatsappTemplateSendabilityLabel(tpl: {
+  is_active?: boolean | null
+  is_draft?: boolean | null
+  provider_approval_status?: string | null
+  provider_template_name?: string | null
+}): string {
+  if (tpl.is_draft === true) return 'Gönderilemez'
+  if (tpl.is_active === false) return 'Gönderilemez'
+  const approval = String(tpl.provider_approval_status || '').toUpperCase()
+  if (approval !== 'APPROVED') return 'Gönderilemez'
+  if (!String(tpl.provider_template_name || '').trim()) return 'Gönderilemez'
+  return 'Gönderilebilir'
+}
+
+export function mailCenterRecordStatusLabel(tpl: {
+  is_active?: boolean | null
+  is_draft?: boolean | null
+}): string {
+  if (tpl.is_draft === true) return 'Taslak'
+  if (tpl.is_active === false) return 'Pasif'
+  return 'Aktif'
 }
 
 export const COMPANY_STATUS_LABELS: Record<string, string> = {

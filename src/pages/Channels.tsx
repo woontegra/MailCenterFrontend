@@ -360,8 +360,18 @@ export default function Channels() {
                     <StatusBadge status={whatsappCardStatus(whatsapp.connections)} />
                   </div>
                   <p className="text-xs text-ink-soft mb-3 leading-relaxed">
-                    Test numarası bağlı olsa bile mevcut WhatsApp Business numaranızı ayrıca
-                    bağlayabilirsiniz.
+                    {whatsapp.connections.some((c: any) => {
+                      const phone = String(
+                        c.phone_number ||
+                          c.settings?.business_phone_number ||
+                          c.settings?.business_phone ||
+                          ''
+                      )
+                      const d = phone.replace(/\D/g, '')
+                      return d === '15551548955' || d.endsWith('5551548955')
+                    })
+                      ? 'Meta inceleme test bağlantısı. Gerçek müşteri numarası bağlantısı Advanced Access onayından sonra kullanılabilir.'
+                      : 'Test numarası bağlı olsa bile mevcut WhatsApp Business numaranızı ayrıca bağlayabilirsiniz.'}
                   </p>
                   <ul className="text-sm text-ink-soft space-y-1.5 flex-1">
                     {whatsapp.connections.length === 0 ? (

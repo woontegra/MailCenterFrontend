@@ -471,6 +471,7 @@ export default function ChannelWhatsAppSetup() {
 
   const manualSave = useMutation({
     mutationFn: async () => {
+      const phoneNumberId = manual.phone_number_id.trim()
       const payload: any = {
         brand_id: Number(brandId),
         channel_type: 'WHATSAPP',
@@ -479,20 +480,64 @@ export default function ChannelWhatsAppSetup() {
         status: 'ACTIVE',
         settings: {
           waba_id: manual.waba_id.trim(),
-          phone_number_id: manual.phone_number_id.trim(),
+          phone_number_id: phoneNumberId,
           business_phone_number: manual.business_phone_number.trim(),
           connection_method: 'MANUAL',
         },
         access_token: manual.access_token.trim(),
-        app_secret: manual.app_secret.trim(),
-        webhook_verify_token: manual.webhook_verify_token.trim(),
       }
-      // Always create a new connection from advanced form — never overwrite another number
+      // Optional: platform env fills secret/verify when omitted
+      if (manual.app_secret.trim()) payload.app_secret = manual.app_secret.trim()
+      if (manual.webhook_verify_token.trim()) {
+        payload.webhook_verify_token = manual.webhook_verify_token.trim()
+      }
+
+      // Prefer updating the managed/selected connection when phone_number_id matches
+      const target =
+        connection &&
+        String(
+          connection.phone_number_id ||
+            connection.settings?.phone_number_id ||
+            connection.settings?.phoneNumberId ||
+            ''
+        ).trim() === phoneNumberId
+          ? connection
+          : brandConnections.find((c: any) => {
+              const pnid = String(
+                c.phone_number_id ||
+                  c.settings?.phone_number_id ||
+                  c.settings?.phoneNumberId ||
+                  ''
+              ).trim()
+              return pnid && pnid === phoneNumberId
+            })
+
+      if (target?.id) {
+        return channelConnectionApi.update(Number(target.id), {
+          display_name: payload.display_name,
+          provider: payload.provider,
+          status: payload.status,
+          settings: {
+            ...(typeof target.settings === 'object' && target.settings ? target.settings : {}),
+            ...payload.settings,
+          },
+          access_token: payload.access_token,
+          app_secret: payload.app_secret,
+          webhook_verify_token: payload.webhook_verify_token,
+        })
+      }
+      // Backend also upserts by phone_number_id for the brand
       return channelConnectionApi.create(payload)
     },
-    onSuccess: () => {
-      setInfo('Gelişmiş bağlantı kaydedildi')
+    onSuccess: (res) => {
+      const id = res.data?.id
+      setInfo(
+        id
+          ? `Gelişmiş bağlantı kaydedildi (connection #${id}). Şablonları senkronize edin.`
+          : 'Gelişmiş bağlantı kaydedildi'
+      )
       setError('')
+      setManual((m) => ({ ...m, access_token: '', app_secret: '', webhook_verify_token: '' }))
       queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
     },
     onError: (err: any) => setError(channelSetupApiError(err, 'Manuel kayıt başarısız')),
@@ -892,8 +937,41 @@ export default function ChannelWhatsAppSetup() {
         {advancedOpen && (
           <form onSubmit={onManualSubmit} className="mt-4 space-y-3">
             <p className="text-xs text-ink-faint">
-              Yalnızca geliştirme / yönetici amaçlı. Üretimde Embedded Signup kullanın.
+              Meta Getting Started / System User access token ile mevcut bağlantıyı yeniler.
+              Aynı Phone Number ID varsa connection üzerine yazar (ör. test connection #11).
+              App Secret ve Webhook Verify boş bırakılırsa sunucu platform env değerlerini kullanır.
+              Token tarayıcıda saklanmaz.
             </p>
+            {connection && (
+              <button
+                type="button"
+                className="text-xs underline text-signal-deep"
+                onClick={() => {
+                  const s =
+                    connection.settings && typeof connection.settings === 'object'
+                      ? connection.settings
+                      : {}
+                  setManual({
+                    display_name: String(connection.display_name || 'Meta Test Numarası'),
+                    waba_id: String(s.waba_id || connection.waba_id || ''),
+                    phone_number_id: String(
+                      s.phone_number_id || connection.phone_number_id || ''
+                    ),
+                    business_phone_number: String(
+                      s.business_phone_number ||
+                        connection.phone_number ||
+                        s.display_phone_number ||
+                        ''
+                    ),
+                    access_token: '',
+                    app_secret: '',
+                    webhook_verify_token: '',
+                  })
+                }}
+              >
+                Seçili bağlantı #{connection.id} alanlarını doldur (token hariç)
+              </button>
+            )}
             {(
               [
                 ['display_name', 'Görünen ad'],
@@ -901,8 +979,8 @@ export default function ChannelWhatsAppSetup() {
                 ['phone_number_id', 'Phone Number ID'],
                 ['business_phone_number', 'İşletme telefonu'],
                 ['access_token', 'Access token'],
-                ['app_secret', 'App secret'],
-                ['webhook_verify_token', 'Webhook verify token'],
+                ['app_secret', 'App secret (opsiyonel)'],
+                ['webhook_verify_token', 'Webhook verify token (opsiyonel)'],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="block text-sm">

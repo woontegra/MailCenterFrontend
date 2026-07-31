@@ -7,6 +7,7 @@ import { APP_DISPLAY_NAME } from '../config/app'
 import {
   connectionPhone,
   connectionPhoneNumberId,
+  isMetaTestWhatsAppPhone,
   pickDefaultWhatsAppConnection,
 } from '../utils/whatsappSenderSelection'
 
@@ -170,7 +171,7 @@ export default function ComposeWhatsApp() {
     setNotice('')
   }, [brandId])
 
-  // Auto-select single / preferred real ACTIVE channel; clear stale selection
+  // Auto-select single / preferred real ACTIVE channel; test-only brands still select
   useEffect(() => {
     if (!brandId) return
     if (channelsLoading) return
@@ -436,6 +437,13 @@ export default function ComposeWhatsApp() {
             </p>
           )}
 
+          {selectedChannel && isMetaTestWhatsAppPhone(connectionPhone(selectedChannel)) && (
+            <p className="text-sm text-sky-900 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+              Meta inceleme test bağlantısı. Gerçek müşteri numarası bağlantısı Advanced Access
+              onayından sonra kullanılabilir.
+            </p>
+          )}
+
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block text-sm">
               <span className="text-xs text-ink-faint uppercase tracking-wide">Gönderen telefon</span>
@@ -541,7 +549,9 @@ export default function ComposeWhatsApp() {
               </label>
               {channelConnectionId && templates.length === 0 && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                  Onaylı WhatsApp şablonu yok. Meta’da onaylı şablon bağlayın; sahte şablon gösterilmez.
+                  Bu gönderici için Meta’dan onaylı (APPROVED) şablon bulunamadı. Kanal
+                  ayarlarından şablonları senkronize edin. Yerel/PENDING şablonlar gönderimde
+                  listelenmez.
                 </p>
               )}
               {declaredVars.map((name) => (
