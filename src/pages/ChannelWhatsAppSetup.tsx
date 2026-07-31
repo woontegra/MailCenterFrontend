@@ -140,12 +140,23 @@ export default function ChannelWhatsAppSetup() {
 
   const connection = useMemo(() => {
     if (!brandId) return null
-    return (
-      connections.find(
-        (c: any) =>
-          String(c.brand_id) === String(brandId) && c.channel_type === 'WHATSAPP'
-      ) || null
+    const forBrand = connections.filter(
+      (c: any) =>
+        String(c.brand_id) === String(brandId) && c.channel_type === 'WHATSAPP'
     )
+    if (forBrand.length === 0) return null
+    const active = forBrand.filter((c: any) => String(c.status).toUpperCase() === 'ACTIVE')
+    const pool = active.length ? active : forBrand
+    const real = pool.find((c: any) => {
+      const phone =
+        c.phone_number ||
+        c.settings?.business_phone_number ||
+        c.settings?.business_phone ||
+        ''
+      const digits = String(phone).replace(/\D/g, '')
+      return digits && digits !== '15551548955' && !digits.endsWith('5551548955')
+    })
+    return real || pool[0] || null
   }, [connections, brandId])
 
   const { data: approvedTemplates = [] } = useQuery({
@@ -236,6 +247,7 @@ export default function ChannelWhatsAppSetup() {
       authorizationCode: string
       sessionInfo?: Record<string, unknown> | null
       onboardingMode: EmbeddedSignupMode
+      preferredPhone?: string
     }) => channelConnectionApi.completeEmbeddedSignup(payload),
     onSuccess: async (res) => {
       const mode = res.data?.connectionType || activeMode
@@ -301,6 +313,9 @@ export default function ChannelWhatsAppSetup() {
             authorizationCode: code,
             sessionInfo,
             onboardingMode: mode,
+            ...(mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING'
+              ? { preferredPhone: '+905323171755' }
+              : {}),
           },
           {
             onSettled: () => {

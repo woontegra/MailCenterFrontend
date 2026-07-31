@@ -4,6 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { Cable, MessageCircle, Send } from 'lucide-react'
 import { brandApi, channelConnectionApi, contactApi, templateApi, whatsappApi } from '../services/api'
 import { APP_DISPLAY_NAME } from '../config/app'
+import {
+  connectionPhone,
+  connectionPhoneNumberId,
+  pickDefaultWhatsAppConnection,
+} from '../utils/whatsappSenderSelection'
 
 function newIdempotencyKey() {
   return `wa_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -18,19 +23,16 @@ function whatsappChannelLabel(c: any): string {
   const settings = connectionSettings(c)
   const title =
     settings.verified_name || c?.display_name || settings.waba_name || 'WhatsApp'
-  const phone =
-    settings.business_phone_number || settings.business_phone || c?.business_phone || '—'
+  const phone = connectionPhone(c) || '—'
   return `${title} — ${phone}`
 }
 
 function businessPhoneOf(c: any): string {
-  const settings = connectionSettings(c)
-  return String(settings.business_phone_number || settings.business_phone || '').trim()
+  return connectionPhone(c)
 }
 
 function phoneNumberIdOf(c: any): string {
-  const settings = connectionSettings(c)
-  return String(settings.phone_number_id || '').trim()
+  return connectionPhoneNumberId(c)
 }
 
 function templateOptionLabel(t: any): string {
@@ -83,15 +85,20 @@ export default function ComposeWhatsApp() {
     isError: channelsError,
     error: channelsErr,
   } = useQuery({
-    queryKey: ['channel-connections', 'WHATSAPP', brandId],
+    queryKey: ['channel-connections', 'WHATSAPP', 'ACTIVE', brandId],
     enabled: Boolean(brandId),
     queryFn: async () => {
       const res = await channelConnectionApi.list({
         channel_type: 'WHATSAPP',
         brand_id: brandId,
+        status: 'ACTIVE',
       })
       const rows = Array.isArray(res.data) ? res.data : []
-      return rows.filter((c: any) => String(c.status || '').toUpperCase() === 'ACTIVE')
+      return rows.filter(
+        (c: any) =>
+          String(c.status || '').toUpperCase() === 'ACTIVE' &&
+          Boolean(connectionPhoneNumberId(c))
+      )
     },
   })
 
@@ -104,7 +111,12 @@ export default function ComposeWhatsApp() {
     queryKey: ['templates-wa', brandId, channelConnectionId],
     enabled: Boolean(brandId) && Boolean(channelConnectionId),
     queryFn: async () => {
-      const res = await templateApi.list({ brand_id: brandId, channel_type: 'WHATSAPP' })
+      const res = await templateApi.list({
+        brand_id: brandId,
+        channel_type: 'WHATSAPP',
+        channel_connection_id: channelConnectionId,
+        approval_status: 'APPROVED',
+      })
       const rows = Array.isArray(res.data?.data) ? res.data.data : []
       return rows.filter(
         (t: any) =>
@@ -158,7 +170,7 @@ export default function ComposeWhatsApp() {
     setNotice('')
   }, [brandId])
 
-  // Auto-select single ACTIVE channel; clear stale selection
+  // Auto-select single / preferred real ACTIVE channel; clear stale selection
   useEffect(() => {
     if (!brandId) return
     if (channelsLoading) return
@@ -168,7 +180,7 @@ export default function ComposeWhatsApp() {
       setSenderIdentityId('')
       setSenderPhone('')
       setPhoneNumberId('')
-      setSenderError('Bu marka için aktif WhatsApp göndericisi bulunamadı.')
+      setSenderError('Bu marka için aktif WhatsApp bağlantısı bulunamadı.')
       return
     }
 
@@ -177,9 +189,10 @@ export default function ComposeWhatsApp() {
       (c: any) => String(c.id) === String(channelConnectionId)
     )
     if (!stillValid) {
-      if (brandWaChannels.length === 1) {
-        setChannelConnectionId(String(brandWaChannels[0].id))
-      } else if (channelConnectionId) {
+      const picked = pickDefaultWhatsAppConnection(brandWaChannels)
+      if (picked) {
+        setChannelConnectionId(String(picked.id))
+      } else {
         setChannelConnectionId('')
         setSenderIdentityId('')
         setSenderPhone('')
