@@ -18,6 +18,9 @@ import { brandApi, channelConnectionApi, templateApi } from '../services/api'
 import { channelSetupApiError } from '../utils/channelSetupErrors'
 import {
   buildEmbeddedSignupLoginOptions,
+  createSyncFbLoginCallback,
+  EMBEDDED_SIGNUP_TIMEOUT_MESSAGE,
+  EMBEDDED_SIGNUP_TIMEOUT_MS,
   EmbeddedSignupMode,
   isTrustedMetaOrigin,
   parseWaEmbeddedSignupMessage,
@@ -88,6 +91,20 @@ export default function ChannelWhatsAppSetup() {
 
   const sessionRef = useRef<ParsedWaEmbeddedSignupEvent | null>(null)
   const completingRef = useRef(false)
+  const onboardingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearOnboardingTimeout = useCallback(() => {
+    if (onboardingTimeoutRef.current != null) {
+      clearTimeout(onboardingTimeoutRef.current)
+      onboardingTimeoutRef.current = null
+    }
+  }, [])
+
+  const stopConnecting = useCallback(() => {
+    clearOnboardingTimeout()
+    setConnecting(false)
+    completingRef.current = false
+  }, [clearOnboardingTimeout])
 
   // Advanced manual form
   const [manual, setManual] = useState({
@@ -154,15 +171,13 @@ export default function ChannelWhatsAppSetup() {
       if (!parsed) return
 
       if (parsed.isCancel) {
-        setConnecting(false)
-        completingRef.current = false
+        stopConnecting()
         setInfo('Bağlantı iptal edildi. Kanal kaydı oluşturulmadı.')
         setError('')
         return
       }
       if (parsed.isError) {
-        setConnecting(false)
-        completingRef.current = false
+        stopConnecting()
         const detail = String(
           (parsed.data as any)?.error_message ||
             (parsed.data as any)?.message ||
@@ -182,7 +197,7 @@ export default function ChannelWhatsAppSetup() {
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [])
+  }, [stopConnecting])
 
   useEffect(() => {
     if (!frontendMetaReady) {
@@ -208,6 +223,12 @@ export default function ChannelWhatsAppSetup() {
       cancelled = true
     }
   }, [frontendMetaReady])
+
+  useEffect(() => {
+    return () => {
+      clearOnboardingTimeout()
+    }
+  }, [clearOnboardingTimeout])
 
   const completeMutation = useMutation({
     mutationFn: (payload: {
@@ -242,6 +263,60 @@ export default function ChannelWhatsAppSetup() {
     return sessionRef.current
   }, [])
 
+  const handleFacebookLoginResponse = useCallback(
+    async (response: any, mode: EmbeddedSignupMode) => {
+      try {
+        const code = response?.authResponse?.code
+        if (!code) {
+          stopConnecting()
+          if (response?.status === 'unknown' || !response?.authResponse) {
+            setInfo('Bağlantı iptal edildi. Kayıt oluşturulmadı.')
+            setError('')
+          } else {
+            setError('Meta yetkilendirme kodu alınamadı')
+            setInfo('')
+          }
+          return
+        }
+
+        if (completingRef.current) {
+          return
+        }
+        completingRef.current = true
+
+        const finished = await waitForFinishSession()
+        const sessionInfo = finished
+          ? {
+              ...finished.raw,
+              waba_id: finished.wabaId,
+              phone_number_id: finished.phoneNumberId,
+              business_id: finished.businessId,
+              event: finished.event,
+            }
+          : null
+
+        completeMutation.mutate(
+          {
+            brandId: Number(brandId),
+            authorizationCode: code,
+            sessionInfo,
+            onboardingMode: mode,
+          },
+          {
+            onSettled: () => {
+              stopConnecting()
+            },
+          }
+        )
+      } catch {
+        stopConnecting()
+        setError('Embedded Signup tamamlanamadı')
+        setInfo('')
+      }
+    },
+    [brandId, completeMutation, stopConnecting, waitForFinishSession]
+  )
+
   const launchEmbeddedSignup = useCallback(
     (mode: EmbeddedSignupMode) => {
       setError('')
@@ -265,70 +340,41 @@ export default function ChannelWhatsAppSetup() {
       sessionRef.current = null
       setActiveMode(mode)
       setConnecting(true)
+      clearOnboardingTimeout()
+      onboardingTimeoutRef.current = setTimeout(() => {
+        stopConnecting()
+        setError(EMBEDDED_SIGNUP_TIMEOUT_MESSAGE)
+        setInfo('')
+      }, EMBEDDED_SIGNUP_TIMEOUT_MS)
 
       const loginOptions = buildEmbeddedSignupLoginOptions({
         configId: META_CONFIG_ID,
         mode,
       })
 
-      window.FB.login(async (response: any) => {
-        try {
-          const code = response?.authResponse?.code
-          if (!code) {
-            setConnecting(false)
-            if (response?.status === 'unknown' || !response?.authResponse) {
-              setInfo('Bağlantı iptal edildi. Kayıt oluşturulmadı.')
-            } else {
-              setError('Meta yetkilendirme kodu alınamadı')
-            }
-            return
-          }
+      // FB.login must receive a *sync* function — never an AsyncFunction.
+      const syncCallback = createSyncFbLoginCallback((response) =>
+        handleFacebookLoginResponse(response, mode)
+      )
 
-          if (completingRef.current) {
-            return
-          }
-          completingRef.current = true
-
-          const finished = await waitForFinishSession()
-          const sessionInfo = finished
-            ? {
-                ...finished.raw,
-                waba_id: finished.wabaId,
-                phone_number_id: finished.phoneNumberId,
-                business_id: finished.businessId,
-                event: finished.event,
-              }
-            : null
-
-          completeMutation.mutate(
-            {
-              brandId: Number(brandId),
-              authorizationCode: code,
-              sessionInfo,
-              onboardingMode: mode,
-            },
-            {
-              onSettled: () => {
-                setConnecting(false)
-                completingRef.current = false
-              },
-            }
-          )
-        } catch {
-          setConnecting(false)
-          completingRef.current = false
-          setError('Embedded Signup tamamlanamadı')
-        }
-      }, loginOptions)
+      try {
+        window.FB.login(syncCallback, loginOptions)
+      } catch {
+        stopConnecting()
+        setError('Meta Embedded Signup başlatılamadı. Lütfen tekrar deneyin.')
+        setInfo('')
+      }
     },
     [
       brandId,
-      completeMutation,
+      clearOnboardingTimeout,
+      completeMutation.isPending,
       connecting,
       frontendMetaReady,
+      handleFacebookLoginResponse,
       sdkReady,
       setupStatus?.embeddedSignupReady,
-      waitForFinishSession,
+      stopConnecting,
     ]
   )
 

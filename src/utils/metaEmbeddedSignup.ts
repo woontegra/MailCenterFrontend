@@ -145,3 +145,37 @@ export function redactSignupDiagnostics(value: unknown): unknown {
   }
   return value
 }
+
+/** Meta FB.login rejects AsyncFunction callbacks. */
+export function isAsyncFunction(fn: unknown): boolean {
+  return typeof fn === 'function' && fn.constructor?.name === 'AsyncFunction'
+}
+
+/**
+ * Wrap an async handler in a *synchronous* FB.login callback.
+ * Facebook JS SDK throws: "Expression is of type asyncfunction, not function"
+ * if an async function is passed directly to FB.login.
+ */
+export function createSyncFbLoginCallback(
+  handler: (response: unknown) => void | Promise<void>
+): (response: unknown) => void {
+  if (typeof handler !== 'function') {
+    throw new Error('FB.login handler must be a function')
+  }
+  const callback = function fbLoginCallback(response: unknown) {
+    void Promise.resolve(handler(response)).catch(() => {
+      /* caller must handle errors inside handler */
+    })
+  }
+  if (isAsyncFunction(callback)) {
+    throw new Error('FB.login callback must not be an AsyncFunction')
+  }
+  return callback
+}
+
+/** Overall Embedded Signup wall-clock timeout (avoid indefinite spinner). */
+export const EMBEDDED_SIGNUP_TIMEOUT_MS = 5 * 60 * 1000
+
+export const EMBEDDED_SIGNUP_TIMEOUT_MESSAGE =
+  'Meta bağlantısı tamamlanamadı. Lütfen tekrar deneyin.'
+

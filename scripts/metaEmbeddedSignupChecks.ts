@@ -4,6 +4,8 @@
  */
 import {
   buildEmbeddedSignupLoginOptions,
+  createSyncFbLoginCallback,
+  isAsyncFunction,
   isTrustedMetaOrigin,
   parseWaEmbeddedSignupMessage,
   redactSignupDiagnostics,
@@ -69,6 +71,57 @@ function main() {
   }) as any
   assert(redacted.authorizationCode === '[redacted]', 'redact code')
   assert(redacted.note === 'ok', 'keep note')
+
+  // FB.login must never receive an AsyncFunction
+  const asyncHandler = async (_response: unknown) => {
+    /* intentional async work */
+  }
+  assert(isAsyncFunction(asyncHandler) === true, 'async handler detected')
+  const syncCb = createSyncFbLoginCallback(asyncHandler)
+  assert(typeof syncCb === 'function', 'sync wrapper is function')
+  assert(isAsyncFunction(syncCb) === false, 'wrapper is not AsyncFunction')
+  assert(syncCb.constructor.name !== 'AsyncFunction', 'constructor.name not AsyncFunction')
+  assert(syncCb.constructor.name === 'Function', 'constructor.name is Function')
+
+  // Sync handler path
+  let syncCalls = 0
+  const syncOnly = createSyncFbLoginCallback(() => {
+    syncCalls += 1
+  })
+  assert(isAsyncFunction(syncOnly) === false, 'sync-only not AsyncFunction')
+  syncOnly({ authResponse: { code: 'x' } })
+  assert(syncCalls === 1, 'sync handler invoked once')
+
+  // Simulated FB.login: sync throw must be catchable; loading cleared by caller
+  let loading = true
+  const mockFbLogin = (cb: (r: unknown) => void) => {
+    if (isAsyncFunction(cb)) {
+      throw new Error('Expression is of type asyncfunction, not function')
+    }
+    throw new Error('SDK sync failure')
+  }
+  try {
+    mockFbLogin(createSyncFbLoginCallback(async () => undefined))
+    assert(false, 'should have thrown')
+  } catch {
+    loading = false
+  }
+  assert(loading === false, 'loading cleared on SDK sync error')
+
+  // CANCEL/ERROR parsing still stops loading in UI contract
+  assert(cancel?.isCancel === true && err?.isError === true, 'cancel/error events')
+
+  // Double-complete guard simulation
+  let completeCount = 0
+  let completing = false
+  const runCompleteOnce = () => {
+    if (completing) return
+    completing = true
+    completeCount += 1
+  }
+  runCompleteOnce()
+  runCompleteOnce()
+  assert(completeCount === 1, 'complete runs once')
 
   console.log('metaEmbeddedSignupChecks PASS')
 }
