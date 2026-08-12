@@ -639,7 +639,7 @@ export default function ChannelWhatsAppSetup() {
   ]
 
   return (
-    <div className="mc-shell pt-1 pb-8 w-full max-w-[1480px]">
+    <div className="mc-shell pt-1 pb-8">
       <button
         type="button"
         onClick={() => navigate('/channels')}
@@ -652,7 +652,7 @@ export default function ChannelWhatsAppSetup() {
       <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">
         WhatsApp kanalını bağla
       </h1>
-      <p className="text-sm text-ink-soft mt-1 mb-4 max-w-3xl">
+      <p className="text-sm text-ink-soft mt-1 mb-4">
         Ana yöntem: Meta Embedded Signup. Token ve secret değerleri yalnızca sunucuda saklanır.
       </p>
 
@@ -788,7 +788,7 @@ export default function ChannelWhatsAppSetup() {
         </section>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,1fr)] lg:gap-5 mb-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,0.65fr)] lg:gap-5 mb-4">
         <section className="mc-panel mc-panel-asymmetric p-4 space-y-3 min-w-0">
           <div>
             <h2 className="font-semibold text-ink text-base">Mevcut WhatsApp bağlantıları</h2>
