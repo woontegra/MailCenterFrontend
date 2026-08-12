@@ -639,11 +639,11 @@ export default function ChannelWhatsAppSetup() {
   ]
 
   return (
-    <div className="mc-shell pt-1 pb-10 max-w-3xl">
+    <div className="mc-shell pt-1 pb-8 w-full max-w-[1480px]">
       <button
         type="button"
         onClick={() => navigate('/channels')}
-        className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink mb-4"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink mb-3"
       >
         <ArrowLeft className="w-4 h-4" />
         Kanal Bağlantıları
@@ -652,13 +652,13 @@ export default function ChannelWhatsAppSetup() {
       <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">
         WhatsApp kanalını bağla
       </h1>
-      <p className="text-sm text-ink-soft mt-1 mb-6">
+      <p className="text-sm text-ink-soft mt-1 mb-4 max-w-3xl">
         Ana yöntem: Meta Embedded Signup. Token ve secret değerleri yalnızca sunucuda saklanır.
       </p>
 
       {(error || info) && (
         <div
-          className={`mb-4 p-3 rounded-xl text-sm ${
+          className={`mb-4 px-3 py-2.5 rounded-xl text-sm ${
             error
               ? 'bg-red-50 border border-red-200 text-red-600'
               : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
@@ -668,212 +668,245 @@ export default function ChannelWhatsAppSetup() {
         </div>
       )}
 
-      <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
-        <h2 className="font-semibold text-ink">Meta Kurulum Durumu</h2>
-        {statusLoading ? (
-          <p className="text-sm text-ink-soft">Kontrol ediliyor…</p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {statusRows.map((row) => (
-              <li key={row.label} className="flex items-center justify-between gap-3">
-                <span className="text-ink-soft">
-                  {row.label}
-                  {row.note ? ` · ${row.note}` : ''}
-                </span>
-                <span
-                  className={
-                    row.ok ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'
-                  }
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 mb-4">
+        <section className="mc-panel mc-panel-asymmetric p-4 space-y-3 min-w-0">
+          <h2 className="font-semibold text-ink text-base">Meta Kurulum Durumu</h2>
+          {statusLoading ? (
+            <p className="text-sm text-ink-soft">Kontrol ediliyor…</p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {statusRows.map((row) => (
+                <li key={row.label} className="flex items-center justify-between gap-3">
+                  <span className="text-ink-soft min-w-0">
+                    {row.label}
+                    {row.note ? ` · ${row.note}` : ''}
+                  </span>
+                  <span
+                    className={
+                      row.ok
+                        ? 'text-emerald-700 font-medium shrink-0'
+                        : 'text-amber-700 font-medium shrink-0'
+                    }
+                  >
+                    {row.ok ? 'Tamam' : 'Eksik / manuel'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {setupStatus?.webhookUrl && (
+            <div className="pt-1">
+              <p className="text-xs text-ink-faint mb-1">Webhook URL</p>
+              <div className="flex gap-2 min-w-0">
+                <code className="flex-1 min-w-0 text-xs bg-canvas-soft rounded-lg px-2.5 py-1.5 break-all">
+                  {setupStatus.webhookUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void copyWebhook()}
+                  className="px-2.5 py-1.5 rounded-xl border border-canvas-line text-sm shrink-0"
                 >
-                  {row.ok ? 'Tamam' : 'Eksik / manuel'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {setupStatus?.webhookUrl && (
-          <div className="pt-2">
-            <p className="text-xs text-ink-faint mb-1">Webhook URL</p>
-            <div className="flex gap-2">
-              <code className="flex-1 text-xs bg-canvas-soft rounded-lg px-3 py-2 break-all">
-                {setupStatus.webhookUrl}
-              </code>
-              <button
-                type="button"
-                onClick={() => void copyWebhook()}
-                className="px-3 py-2 rounded-xl border border-canvas-line text-sm"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-ink-faint mt-1">
+                Eski uyumluluk: /api/webhooks/whatsapp/meta
+              </p>
             </div>
-            <p className="text-xs text-ink-faint mt-1">
-              Eski uyumluluk: /api/webhooks/whatsapp/meta
+          )}
+          {!setupStatus?.embeddedSignupReady && (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Meta WhatsApp yapılandırması tamamlanmamış. Embedded Signup butonu çalışmaz.
+              {Array.isArray(setupStatus?.missing) && setupStatus.missing.length > 0
+                ? ` Eksik: ${setupStatus.missing.join(', ')}`
+                : !frontendMetaReady
+                  ? ' Frontend: VITE_META_APP_ID / VITE_META_WHATSAPP_CONFIG_ID'
+                  : ''}
+            </p>
+          )}
+        </section>
+
+        <section className="mc-panel mc-panel-asymmetric p-4 space-y-3 min-w-0">
+          <label className="block text-sm">
+            <span className="text-ink-soft font-medium">Marka</span>
+            <select
+              className="mt-1 w-full px-3 py-2 rounded-xl border border-canvas-line bg-white"
+              value={brandId}
+              onChange={(e) => setBrandId(e.target.value)}
+            >
+              <option value="">Marka seçin</option>
+              {brands.map((b: any) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 space-y-1">
+            <p className="text-sm text-emerald-900 font-medium flex items-center gap-2">
+              <Smartphone className="w-4 h-4 shrink-0" />
+              Yeni WhatsApp bağlantısı ekle
+            </p>
+            <p className="text-xs text-emerald-900/80 leading-snug">
+              Test numarası zaten bağlı olsa bile mevcut WhatsApp Business numaranızı (ör.
+              +90 532 317 17 55) ayrıca bağlayabilirsiniz. Numara uygulamadan silinmez;
+              Cloud API ile birlikte (coexistence) çalışır.
             </p>
           </div>
-        )}
-        {!setupStatus?.embeddedSignupReady && (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            Meta WhatsApp yapılandırması tamamlanmamış. Embedded Signup butonu çalışmaz.
-            {Array.isArray(setupStatus?.missing) && setupStatus.missing.length > 0
-              ? ` Eksik: ${setupStatus.missing.join(', ')}`
-              : !frontendMetaReady
-                ? ' Frontend: VITE_META_APP_ID / VITE_META_WHATSAPP_CONFIG_ID'
-                : ''}
-          </p>
-        )}
-      </section>
 
-      <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
-        <label className="block text-sm">
-          <span className="text-ink-soft font-medium">Marka</span>
-          <select
-            className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-canvas-line bg-white"
-            value={brandId}
-            onChange={(e) => setBrandId(e.target.value)}
+          <button
+            type="button"
+            id="wa-coexistence-cta"
+            disabled={metaButtonsDisabled}
+            onClick={() => launchEmbeddedSignup('WHATSAPP_BUSINESS_APP_ONBOARDING')}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1877F2] text-white text-sm font-semibold disabled:opacity-50"
           >
-            <option value="">Marka seçin</option>
-            {brands.map((b: any) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            {connecting && activeMode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : null}
+            Mevcut WhatsApp Business numarasını bağla
+          </button>
 
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-3 space-y-2">
-          <p className="text-sm text-emerald-900 font-medium flex items-center gap-2">
-            <Smartphone className="w-4 h-4 shrink-0" />
+          <button
+            type="button"
+            disabled={metaButtonsDisabled}
+            onClick={() => launchEmbeddedSignup('STANDARD')}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#1877F2] text-[#1877F2] bg-white text-sm font-semibold disabled:opacity-50"
+          >
+            {connecting && activeMode === 'STANDARD' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : null}
             Yeni WhatsApp bağlantısı ekle
+          </button>
+
+          <p className="text-xs text-ink-faint leading-snug">
+            Kullanıcı iptal ederse kanal kaydı oluşturulmaz. Authorization code yalnızca bir kez
+            backend’e gönderilir; access token frontend’de saklanmaz. Mevcut test bağlantısı
+            silinmez.
           </p>
-          <p className="text-xs text-emerald-900/80">
-            Test numarası zaten bağlı olsa bile mevcut WhatsApp Business numaranızı (ör.
-            +90 532 317 17 55) ayrıca bağlayabilirsiniz. Numara uygulamadan silinmez;
-            Cloud API ile birlikte (coexistence) çalışır.
-          </p>
-        </div>
+        </section>
+      </div>
 
-        <button
-          type="button"
-          id="wa-coexistence-cta"
-          disabled={metaButtonsDisabled}
-          onClick={() => launchEmbeddedSignup('WHATSAPP_BUSINESS_APP_ONBOARDING')}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1877F2] text-white text-sm font-semibold disabled:opacity-50"
-        >
-          {connecting && activeMode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : null}
-          Mevcut WhatsApp Business numarasını bağla
-        </button>
-
-        <button
-          type="button"
-          disabled={metaButtonsDisabled}
-          onClick={() => launchEmbeddedSignup('STANDARD')}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-[#1877F2] text-[#1877F2] bg-white text-sm font-semibold disabled:opacity-50"
-        >
-          {connecting && activeMode === 'STANDARD' ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : null}
-          Yeni WhatsApp bağlantısı ekle
-        </button>
-
-        <p className="text-xs text-ink-faint">
-          Kullanıcı iptal ederse kanal kaydı oluşturulmaz. Authorization code yalnızca bir kez
-          backend’e gönderilir; access token frontend’de saklanmaz. Mevcut test bağlantısı
-          silinmez.
-        </p>
-      </section>
-
-      {brandConnections.length > 0 && (
-        <section className="mc-panel mc-panel-asymmetric p-5 mb-5 space-y-4">
-          <h2 className="font-semibold text-ink">Mevcut WhatsApp bağlantıları</h2>
-          <p className="text-xs text-ink-soft">
-            Her satır ayrı channel_connection kaydıdır. Birini kaldırmak diğerini etkilemez.
-          </p>
-          <ul className="space-y-3">
-            {brandConnections.map((c: any) => {
-              const phone =
-                c.phone_number ||
-                c.settings?.business_phone_number ||
-                c.settings?.business_phone ||
-                '—'
-              const name = c.settings?.verified_name || c.display_name || 'WhatsApp'
-              const ctype = String(
-                c.connection_type ||
-                  c.settings?.connection_type ||
-                  c.settings?.connection_method ||
-                  ''
-              )
-              const selected = String(c.id) === String(managedConnectionId)
-              return (
-                <li
-                  key={c.id}
-                  className={`rounded-xl border px-3 py-3 ${
-                    selected ? 'border-dock bg-dock/5' : 'border-canvas-line bg-white'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => setManagedConnectionId(String(c.id))}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,1fr)] lg:gap-5 mb-4">
+        <section className="mc-panel mc-panel-asymmetric p-4 space-y-3 min-w-0">
+          <div>
+            <h2 className="font-semibold text-ink text-base">Mevcut WhatsApp bağlantıları</h2>
+            <p className="text-xs text-ink-soft mt-0.5">
+              Her satır ayrı channel_connection kaydıdır. Birini kaldırmak diğerini etkilemez.
+            </p>
+          </div>
+          {brandConnections.length === 0 ? (
+            <p className="text-sm text-ink-soft bg-canvas-soft/60 border border-canvas-line rounded-xl px-3 py-3">
+              {brandId
+                ? 'Bu marka için henüz WhatsApp bağlantısı yok.'
+                : 'Bağlantıları görmek için önce marka seçin.'}
+            </p>
+          ) : (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {brandConnections.map((c: any) => {
+                const phone =
+                  c.phone_number ||
+                  c.settings?.business_phone_number ||
+                  c.settings?.business_phone ||
+                  '—'
+                const name = c.settings?.verified_name || c.display_name || 'WhatsApp'
+                const ctype = String(
+                  c.connection_type ||
+                    c.settings?.connection_type ||
+                    c.settings?.connection_method ||
+                    ''
+                )
+                const selected = String(c.id) === String(managedConnectionId)
+                const statusUpper = String(c.status || '').toUpperCase()
+                const isActive = statusUpper === 'ACTIVE'
+                const isDisabled = statusUpper === 'DISABLED'
+                return (
+                  <li
+                    key={c.id}
+                    className={`rounded-xl border px-3 py-2.5 min-w-0 ${
+                      selected
+                        ? 'border-dock ring-2 ring-dock/25 bg-dock/5'
+                        : isActive
+                          ? 'border-emerald-200 bg-emerald-50/40'
+                          : isDisabled
+                            ? 'border-canvas-line bg-canvas-soft/70 opacity-90'
+                            : 'border-canvas-line bg-white'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-ink">{name}</p>
-                        <p className="text-sm text-ink">{phone}</p>
-                        <p className="text-xs text-ink-faint mt-1">
-                          ID {c.id} · {c.status}
-                          {ctype ? ` · ${ctype}` : ''}
-                          {c.phone_number_id || c.settings?.phone_number_id
-                            ? ` · PNID ${c.phone_number_id || c.settings?.phone_number_id}`
-                            : ''}
-                          {c.waba_id || c.settings?.waba_id
-                            ? ` · WABA ${c.waba_id || c.settings?.waba_id}`
-                            : ''}
-                        </p>
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => setManagedConnectionId(String(c.id))}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-ink truncate">{name}</p>
+                          <p className="text-sm text-ink truncate">{phone}</p>
+                          <p className="text-[11px] text-ink-faint mt-1 break-all leading-snug">
+                            ID {c.id} · {c.status}
+                            {ctype ? ` · ${ctype}` : ''}
+                            {c.phone_number_id || c.settings?.phone_number_id
+                              ? ` · PNID ${c.phone_number_id || c.settings?.phone_number_id}`
+                              : ''}
+                            {c.waba_id || c.settings?.waba_id
+                              ? ` · WABA ${c.waba_id || c.settings?.waba_id}`
+                              : ''}
+                          </p>
+                        </div>
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Bağlı
+                          </span>
+                        ) : isDisabled ? (
+                          <span className="inline-flex items-center text-[11px] text-ink-soft bg-white border border-canvas-line px-2 py-0.5 rounded-full shrink-0">
+                            Pasif
+                          </span>
+                        ) : null}
                       </div>
-                      {String(c.status).toUpperCase() === 'ACTIVE' && (
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full shrink-0">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Bağlı
-                        </span>
-                      )}
+                    </button>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <button
+                        type="button"
+                        disabled={!isActive || setDefaultMutation.isPending}
+                        onClick={() => setDefaultMutation.mutate(Number(c.id))}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs disabled:opacity-50"
+                      >
+                        Varsayılan gönderici yap
+                      </button>
+                      <button
+                        type="button"
+                        disabled={disconnectMutation.isPending}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setDisconnectTarget({
+                            id: Number(c.id),
+                            label: `${name} · ${phone}`,
+                          })
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-red-200 text-red-600 text-xs"
+                      >
+                        <Unplug className="w-3.5 h-3.5" />
+                        Bağlantıyı kaldır
+                      </button>
                     </div>
-                  </button>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button
-                      type="button"
-                      disabled={String(c.status).toUpperCase() !== 'ACTIVE' || setDefaultMutation.isPending}
-                      onClick={() => setDefaultMutation.mutate(Number(c.id))}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm disabled:opacity-50"
-                    >
-                      Varsayılan gönderici yap
-                    </button>
-                    <button
-                      type="button"
-                      disabled={disconnectMutation.isPending}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setDisconnectTarget({
-                          id: Number(c.id),
-                          label: `${name} · ${phone}`,
-                        })
-                      }}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 text-red-600 text-sm"
-                    >
-                      <Unplug className="w-4 h-4" />
-                      Bağlantıyı kaldır
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
 
-          {connection && (
+        <section className="mc-panel mc-panel-asymmetric p-4 space-y-3 min-w-0 h-fit lg:sticky lg:top-20">
+          <h2 className="font-semibold text-ink text-base">Doğrulama ve test</h2>
+          {connection ? (
             <>
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-canvas-line">
+              <p className="text-xs text-ink-soft">
+                Seçili bağlantı #{connection.id}
+              </p>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={verifyMutation.isPending || !connection.id}
@@ -902,7 +935,7 @@ export default function ChannelWhatsAppSetup() {
                 </button>
               </div>
 
-              <div className="border-t border-canvas-line pt-4 space-y-3">
+              <div className="border-t border-canvas-line pt-3 space-y-2.5">
                 <h3 className="text-sm font-medium text-ink">
                   Test şablon mesajı (seçili bağlantı #{connection.id})
                 </h3>
@@ -930,7 +963,11 @@ export default function ChannelWhatsAppSetup() {
                   onClick={() => void sendTestTemplate()}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dock text-white text-sm disabled:opacity-50"
                 >
-                  {testingMsg ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+                  {testingMsg ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FlaskConical className="w-4 h-4" />
+                  )}
                   Test mesajı gönder
                 </button>
                 {approvedTemplates.length === 0 && (
@@ -940,11 +977,15 @@ export default function ChannelWhatsAppSetup() {
                 )}
               </div>
             </>
+          ) : (
+            <p className="text-sm text-ink-soft bg-canvas-soft/60 border border-canvas-line rounded-xl px-3 py-3">
+              Doğrulama ve test için soldan bir bağlantı seçin.
+            </p>
           )}
         </section>
-      )}
+      </div>
 
-      <section className="mc-panel mc-panel-asymmetric p-5">
+      <section className="mc-panel mc-panel-asymmetric p-4">
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
@@ -954,8 +995,8 @@ export default function ChannelWhatsAppSetup() {
           {advancedOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {advancedOpen && (
-          <form onSubmit={onManualSubmit} className="mt-4 space-y-3">
-            <p className="text-xs text-ink-faint">
+          <form onSubmit={onManualSubmit} className="mt-3 space-y-3">
+            <p className="text-xs text-ink-faint leading-snug">
               Meta Getting Started / System User access token ile mevcut bağlantıyı yeniler.
               Aynı Phone Number ID varsa connection üzerine yazar (ör. test connection #11).
               App Secret ve Webhook Verify boş bırakılırsa sunucu platform env değerlerini kullanır.
@@ -991,30 +1032,32 @@ export default function ChannelWhatsAppSetup() {
                 Seçili bağlantı #{connection.id} alanlarını doldur (token hariç)
               </button>
             )}
-            {(
-              [
-                ['display_name', 'Görünen ad'],
-                ['waba_id', 'WABA ID'],
-                ['phone_number_id', 'Phone Number ID'],
-                ['business_phone_number', 'İşletme telefonu'],
-                ['access_token', 'Access token'],
-                ['app_secret', 'App secret (opsiyonel)'],
-                ['webhook_verify_token', 'Webhook verify token (opsiyonel)'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="block text-sm">
-                <span className="text-ink-soft">{label}</span>
-                <input
-                  type={
-                    key.includes('token') || key.includes('secret') ? 'password' : 'text'
-                  }
-                  className="mt-1 w-full px-3 py-2 rounded-xl border text-sm"
-                  value={(manual as any)[key]}
-                  onChange={(e) => setManual({ ...manual, [key]: e.target.value })}
-                  autoComplete="off"
-                />
-              </label>
-            ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {(
+                [
+                  ['display_name', 'Görünen ad'],
+                  ['waba_id', 'WABA ID'],
+                  ['phone_number_id', 'Phone Number ID'],
+                  ['business_phone_number', 'İşletme telefonu'],
+                  ['access_token', 'Access token'],
+                  ['app_secret', 'App secret (opsiyonel)'],
+                  ['webhook_verify_token', 'Webhook verify token (opsiyonel)'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="block text-sm min-w-0">
+                  <span className="text-ink-soft">{label}</span>
+                  <input
+                    type={
+                      key.includes('token') || key.includes('secret') ? 'password' : 'text'
+                    }
+                    className="mt-1 w-full px-3 py-2 rounded-xl border text-sm"
+                    value={(manual as any)[key]}
+                    onChange={(e) => setManual({ ...manual, [key]: e.target.value })}
+                    autoComplete="off"
+                  />
+                </label>
+              ))}
+            </div>
             <button
               type="submit"
               disabled={manualSave.isPending || !brandId}
@@ -1034,7 +1077,7 @@ export default function ChannelWhatsAppSetup() {
         )}
       </section>
 
-      <p className="mt-4 text-sm text-ink-soft">
+      <p className="mt-3 text-sm text-ink-soft">
         <Link to="/channels" className="underline text-signal-deep">
           Kanal Bağlantıları’na dön
         </Link>
