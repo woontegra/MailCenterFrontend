@@ -549,9 +549,9 @@ export default function ComposeWhatsApp() {
               </label>
               {channelConnectionId && templates.length === 0 && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                  Bu gönderici için Meta’dan onaylı (APPROVED) şablon bulunamadı. Kanal
-                  ayarlarından şablonları senkronize edin. Yerel/PENDING şablonlar gönderimde
-                  listelenmez.
+                  Bu gönderici için onaylı şablon bulunamadı. Kanal ayarlarından veya Hazır
+                  Kütüphane’den şablon ekleyip senkronize edin. Onay bekleyen veya reddedilen
+                  şablonlar gönderimde listelenmez.
                 </p>
               )}
               {declaredVars.map((name) => (

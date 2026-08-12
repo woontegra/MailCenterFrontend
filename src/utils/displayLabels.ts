@@ -51,11 +51,30 @@ export const APPROVAL_STATUS_LABELS: Record<string, string> = {
   REJECTED: 'Reddedildi',
   PAUSED: 'Duraklatıldı',
   DISABLED: 'Kapalı',
+  UNKNOWN: 'Durum güncelleniyor',
+}
+
+/** Longer user-facing explanations for WhatsApp template approval states. */
+export const APPROVAL_STATUS_HELP: Record<string, string> = {
+  PENDING: 'Meta onayı bekleniyor. Onaylanana kadar gönderilemez.',
+  APPROVED: 'Kullanıma hazır.',
+  REJECTED: 'Meta tarafından reddedildi. Nedeni görüntüleyip düzenleyebilirsiniz.',
+  PAUSED: 'Meta tarafından geçici olarak durduruldu.',
+  UNKNOWN: 'Durum henüz Meta’dan alınamadı. Durumu yenileyin.',
+  DISABLED: 'Kapalı.',
 }
 
 export function approvalStatusLabel(code: string | null | undefined): string {
-  if (!code) return 'Onay bekliyor'
+  if (!code) return APPROVAL_STATUS_LABELS.PENDING
   return APPROVAL_STATUS_LABELS[String(code).toUpperCase()] || String(code)
+}
+
+export function approvalStatusHelp(code: string | null | undefined): string {
+  if (!code) return APPROVAL_STATUS_HELP.PENDING
+  return (
+    APPROVAL_STATUS_HELP[String(code).toUpperCase()] ||
+    approvalStatusLabel(code)
+  )
 }
 
 /** WhatsApp template send eligibility for template cards. */

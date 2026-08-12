@@ -281,6 +281,25 @@ export const templateApi = {
   duplicate: (id: number) => api.post(`/templates/${id}/duplicate`),
   compile: (data: any) => api.post('/templates/compile', data),
   render: (data: any) => api.post('/templates/render', data),
+  listLibrary: (params?: {
+    brand_id?: number
+    channel_connection_id?: number
+  }) => api.get('/templates/library', { params }),
+  submitLibraryTemplate: (
+    key: string,
+    data: {
+      brand_id: number
+      channelConnectionId: number
+      bodyText?: string
+      examples?: string[]
+    }
+  ) => api.post(`/templates/library/${encodeURIComponent(key)}/submit`, data),
+  refreshLibraryTemplate: (
+    key: string,
+    data: { brand_id: number; channelConnectionId: number }
+  ) => api.post(`/templates/library/${encodeURIComponent(key)}/refresh`, data),
+  syncLibraryTemplates: (data: { channelConnectionId: number }) =>
+    api.post('/templates/library/sync', data),
 }
 
 export const templateMediaApi = {

@@ -5,7 +5,8 @@ import { Copy, Eye, Plus, Search, Trash2, Pencil } from 'lucide-react'
 import { brandApi, channelConnectionApi, senderIdentityApi, templateApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { normalizeWhatsAppTemplateName } from '../utils/whatsappTemplateName'
-import { approvalStatusLabel, mailCenterRecordStatusLabel, whatsappTemplateSendabilityLabel } from '../utils/displayLabels'
+import { approvalStatusHelp, mailCenterRecordStatusLabel, whatsappTemplateSendabilityLabel } from '../utils/displayLabels'
+import WhatsAppReadyLibrary from '../components/templates/WhatsAppReadyLibrary'
 
 const emptyForm = () => ({
   brand_id: '',
@@ -38,14 +39,6 @@ function templateCategory(tpl: any): string {
   return '—'
 }
 
-function metaTemplateId(tpl: any): string {
-  const comps = tpl?.provider_template_components
-  if (comps && typeof comps === 'object' && !Array.isArray(comps) && comps.meta_template_id) {
-    return String(comps.meta_template_id)
-  }
-  return '—'
-}
-
 function whatsappChannelLabel(c: any): string {
   const title =
     c?.settings?.verified_name ||
@@ -67,6 +60,7 @@ export default function Templates() {
   const [brandFilter, setBrandFilter] = useState('')
   const [previewTpl, setPreviewTpl] = useState<any | null>(null)
   const [form, setForm] = useState(emptyForm())
+  const [mainTab, setMainTab] = useState<'mine' | 'library'>('mine')
 
   const listParams = useMemo(() => {
     const p: Record<string, string | number> = {}
@@ -277,11 +271,11 @@ export default function Templates() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">İçerik</p>
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">Şablonlar</h1>
           <p className="text-sm text-ink-soft mt-1">
-            Markaya özel e-posta şablonlarını blok editörü ile oluşturun. SMS ve WhatsApp şablonları
-            klasik form ile yönetilir.
+            Hazır WhatsApp şablonlarını hesabınıza ekleyin veya kendi e-posta / SMS / WhatsApp
+            şablonlarınızı yönetin.
           </p>
         </div>
-        {canManage && (
+        {canManage && mainTab === 'mine' && (
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => navigate('/templates/new')}
@@ -302,6 +296,66 @@ export default function Templates() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="flex gap-1 mb-5 border-b border-canvas-line">
+        <button
+          type="button"
+          onClick={() => setMainTab('library')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            mainTab === 'library'
+              ? 'border-dock text-ink'
+              : 'border-transparent text-ink-soft hover:text-ink'
+          }`}
+        >
+          Hazır Kütüphane
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('mine')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            mainTab === 'mine'
+              ? 'border-dock text-ink'
+              : 'border-transparent text-ink-soft hover:text-ink'
+          }`}
+        >
+          Şablonlarım
+        </button>
+      </div>
+
+      {mainTab === 'library' ? (
+        <WhatsAppReadyLibrary />
+      ) : (
+        <>
+      <div className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-3 text-sky-950 mb-4">
+        <p className="text-sm font-semibold">WhatsApp mesajları ne zaman gönderilebilir?</p>
+        <p className="text-sm mt-1 leading-snug text-sky-900/90">
+          Müşteri son 24 saat içinde size mesaj gönderdiyse serbest metinle yanıt verebilirsiniz.
+          İşletmenizin başlattığı ödeme hatırlatma, randevu, sipariş ve duyuru mesajlarında ise
+          onaylı WhatsApp şablonu kullanılır. 24 saat beklemeniz gerekmez; onaylı şablonla mesajı
+          doğrudan gönderebilirsiniz.
+        </p>
+        <ul className="mt-2 space-y-0.5 text-xs text-sky-900/90">
+          <li>
+            <span className="font-medium">Onay bekliyor:</span> Meta onayı bekleniyor. Onaylanana
+            kadar gönderilemez.
+          </li>
+          <li>
+            <span className="font-medium">Onaylandı:</span> Kullanıma hazır.
+          </li>
+          <li>
+            <span className="font-medium">Reddedildi:</span> Meta tarafından reddedildi. Nedeni
+            görüntüleyip düzenleyebilirsiniz.
+          </li>
+          <li>
+            <span className="font-medium">Duraklatıldı:</span> Meta tarafından geçici olarak
+            durduruldu.
+          </li>
+          <li>
+            <span className="font-medium">Durum güncelleniyor:</span> Durum henüz Meta’dan
+            alınamadı. Durumu yenileyin.
+          </li>
+        </ul>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -383,21 +437,15 @@ export default function Templates() {
                         </span>
                       </li>
                       <li>
-                        Meta durumu:{' '}
+                        Onay durumu:{' '}
                         <span className="text-ink font-medium">
-                          {approvalStatusLabel(tpl.provider_approval_status)}
+                          {approvalStatusHelp(tpl.provider_approval_status)}
                         </span>
                       </li>
                       <li>
                         Kullanılabilirlik:{' '}
                         <span className="text-ink font-medium">
                           {whatsappTemplateSendabilityLabel(tpl)}
-                        </span>
-                      </li>
-                      <li>
-                        Provider:{' '}
-                        <span className="text-ink font-medium">
-                          {tpl.provider_template_name || '—'}
                         </span>
                       </li>
                       <li>
@@ -409,10 +457,6 @@ export default function Templates() {
                       <li>
                         Kategori:{' '}
                         <span className="text-ink font-medium">{templateCategory(tpl)}</span>
-                      </li>
-                      <li>
-                        Meta ID:{' '}
-                        <span className="text-ink font-medium break-all">{metaTemplateId(tpl)}</span>
                       </li>
                     </ul>
                   )}
@@ -481,6 +525,8 @@ export default function Templates() {
             )
           })}
         </div>
+      )}
+        </>
       )}
 
       {previewTpl && (
@@ -676,9 +722,9 @@ export default function Templates() {
                     <option value="AUTHENTICATION">Kimlik doğrulama</option>
                   </select>
                 </label>
-                <p className="text-xs text-ink-faint rounded-xl bg-canvas-soft px-3 py-2">
-                  Meta durumu kullanıcı tarafından seçilmez. Kayıt sonrası Meta’dan gelen durum
-                  (genelde bekliyor) kullanılır; onay için “Şablonları senkronize et” çalıştırın.
+                <p className="text-xs text-sky-950 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 leading-snug">
+                  Bu şablon bağlı WhatsApp hesabınız için Meta onayına gönderilir. Onaylandıktan
+                  sonra tekrar tekrar kullanabilirsiniz.
                 </p>
               </>
             )}
