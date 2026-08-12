@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { brandApi, channelConnectionApi, templateApi } from '../services/api'
 import { channelSetupApiError } from '../utils/channelSetupErrors'
+import { useNotificationStore } from '../store/notificationStore'
 import {
   buildEmbeddedSignupLoginOptions,
   createSyncFbLoginCallback,
@@ -71,10 +72,13 @@ function loadFacebookSdk(appId: string): Promise<void> {
   })
 }
 
+type DisconnectTarget = { id: number; label: string }
+
 export default function ChannelWhatsAppSetup() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const addToast = useNotificationStore((s) => s.addToast)
   const presetBrandId = searchParams.get('brandId') || ''
   const intent = String(searchParams.get('intent') || '').toLowerCase()
 
@@ -90,6 +94,7 @@ export default function ChannelWhatsAppSetup() {
   const [testTemplateId, setTestTemplateId] = useState('')
   const [testingMsg, setTestingMsg] = useState(false)
   const [managedConnectionId, setManagedConnectionId] = useState<string>('')
+  const [disconnectTarget, setDisconnectTarget] = useState<DisconnectTarget | null>(null)
 
   const sessionRef = useRef<ParsedWaEmbeddedSignupEvent | null>(null)
   const completingRef = useRef(false)
@@ -451,12 +456,27 @@ export default function ChannelWhatsAppSetup() {
 
   const disconnectMutation = useMutation({
     mutationFn: (id: number) => channelConnectionApi.disconnectWhatsApp(id),
-    onSuccess: (res) => {
-      setInfo(res.data?.message || 'Bağlantı kaldırıldı')
+    onSuccess: async (res, id) => {
+      const message =
+        res.data?.message || 'WhatsApp bağlantısı pasifleştirildi. Geçmiş konuşmalar korundu.'
+      setDisconnectTarget(null)
       setError('')
-      queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+      setInfo('')
+      if (String(managedConnectionId) === String(id)) {
+        setManagedConnectionId('')
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-connections'] }),
+        queryClient.invalidateQueries({ queryKey: ['billing-usage'] }),
+        refetchConnections(),
+      ])
+      addToast({ type: 'success', title: 'Bağlantı kaldırıldı', message })
     },
-    onError: (err: any) => setError(channelSetupApiError(err, 'Bağlantı kaldırılamadı')),
+    onError: (err: any) => {
+      const message = channelSetupApiError(err, 'Bağlantı kaldırılamadı')
+      setError(message)
+      addToast({ type: 'error', title: 'Bağlantı kaldırılamadı', message })
+    },
   })
 
   const setDefaultMutation = useMutation({
@@ -832,14 +852,13 @@ export default function ChannelWhatsAppSetup() {
                     <button
                       type="button"
                       disabled={disconnectMutation.isPending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `${phone} bağlantısı kaldırılsın mı? Diğer WhatsApp bağlantıları etkilenmez.`
-                          )
-                        ) {
-                          disconnectMutation.mutate(Number(c.id))
-                        }
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setDisconnectTarget({
+                          id: Number(c.id),
+                          label: `${name} · ${phone}`,
+                        })
                       }}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-red-200 text-red-600 text-sm"
                     >
@@ -1020,6 +1039,55 @@ export default function ChannelWhatsAppSetup() {
           Kanal Bağlantıları’na dön
         </Link>
       </p>
+
+      {disconnectTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wa-disconnect-title"
+          onClick={() => {
+            if (!disconnectMutation.isPending) setDisconnectTarget(null)
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white border border-canvas-line p-5 shadow-lg space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="wa-disconnect-title" className="font-semibold text-ink text-lg">
+              Bağlantıyı kaldır
+            </h3>
+            <p className="text-sm text-ink-soft">
+              <span className="text-ink font-medium">{disconnectTarget.label}</span> bağlantısı
+              kaldırılsın mı? Yalnızca bu kanal kaydı pasifleştirilir; diğer WhatsApp bağlantıları,
+              Meta/WABA varlıkları ve mesaj geçmişi etkilenmez.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={disconnectMutation.isPending}
+                onClick={() => setDisconnectTarget(null)}
+                className="px-4 py-2 rounded-xl border text-sm disabled:opacity-50"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={disconnectMutation.isPending}
+                onClick={() => disconnectMutation.mutate(disconnectTarget.id)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm disabled:opacity-50"
+              >
+                {disconnectMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Unplug className="w-4 h-4" />
+                )}
+                Evet, kaldır
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
