@@ -415,7 +415,7 @@ export default function WhatsAppReadyLibrary() {
                       ) : (
                         <Send className="w-4 h-4" />
                       )}
-                      WABA’ya ekle ve onaya gönder
+                      WhatsApp hesabıma ekle ve onaya gönder
                     </button>
                   )}
                   {canManage && selected.installation && connectionId && (
