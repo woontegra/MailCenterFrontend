@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Cable, MessageCircle, Send } from 'lucide-react'
+import { Cable, MessageCircle, Send, Users } from 'lucide-react'
 import { brandApi, channelConnectionApi, contactApi, templateApi, whatsappApi } from '../services/api'
+import WhatsAppBulkCampaignPanel from '../components/whatsapp/WhatsAppBulkCampaignPanel'
 import { APP_DISPLAY_NAME } from '../config/app'
 import {
   connectionPhone,
@@ -71,6 +72,7 @@ export default function ComposeWhatsApp() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sending, setSending] = useState(false)
+  const [composeMode, setComposeMode] = useState<'single' | 'bulk'>('single')
 
   const { data: brands = [] } = useQuery({
     queryKey: ['brands'],
@@ -358,9 +360,34 @@ export default function ComposeWhatsApp() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-signal-deep mb-1">Kanallar</p>
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-ink">WhatsApp Yaz</h1>
           <p className="text-sm text-ink-soft mt-1">
-            {APP_DISPLAY_NAME} — onaylı şablon veya 24s penceresinde serbest metin.
+            {composeMode === 'single'
+              ? `${APP_DISPLAY_NAME} — onaylı şablon veya 24s penceresinde serbest metin.`
+              : `${APP_DISPLAY_NAME} — onaylı pazarlama şablonlarıyla toplu WhatsApp gönderimi.`}
           </p>
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${
+            composeMode === 'single' ? 'bg-dock text-white' : 'border border-canvas-line'
+          }`}
+          onClick={() => setComposeMode('single')}
+        >
+          <Send className="w-3.5 h-3.5" />
+          Tek kişiye gönder
+        </button>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${
+            composeMode === 'bulk' ? 'bg-dock text-white' : 'border border-canvas-line'
+          }`}
+          onClick={() => setComposeMode('bulk')}
+        >
+          <Users className="w-3.5 h-3.5" />
+          Toplu gönderim
+        </button>
       </div>
 
       {error && (
@@ -444,7 +471,7 @@ export default function ComposeWhatsApp() {
             </p>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className={composeMode === 'single' ? 'grid gap-3 md:grid-cols-2' : ''}>
             <label className="block text-sm">
               <span className="text-xs text-ink-faint uppercase tracking-wide">Gönderen telefon</span>
               <input
@@ -453,24 +480,38 @@ export default function ComposeWhatsApp() {
                 readOnly
                 placeholder={channelConnectionId ? '—' : 'Önce gönderen seçin'}
               />
-              {phoneNumberId ? (
+              {composeMode === 'single' && phoneNumberId ? (
                 <span className="text-[11px] text-ink-faint mt-1 block">
                   Phone Number ID: {phoneNumberId}
                 </span>
               ) : null}
             </label>
-            <label className="block text-sm">
-              <span className="text-xs text-ink-faint uppercase tracking-wide">Alıcı telefon</span>
-              <input
-                className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
-                placeholder="+905..."
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                required
-              />
-            </label>
+            {composeMode === 'single' && (
+              <label className="block text-sm">
+                <span className="text-xs text-ink-faint uppercase tracking-wide">Alıcı telefon</span>
+                <input
+                  className="mt-1 w-full px-3 py-2.5 rounded-xl bg-canvas-soft text-sm"
+                  placeholder="+905..."
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  required
+                />
+              </label>
+            )}
           </div>
 
+          {composeMode === 'bulk' && (
+            <WhatsAppBulkCampaignPanel
+              brandId={brandId}
+              channelConnectionId={channelConnectionId}
+              senderIdentityId={senderIdentityId}
+              ensuringSender={ensuringSender}
+              senderError={senderError}
+            />
+          )}
+
+          {composeMode === 'single' && (
+            <>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block text-sm md:col-span-2">
               <span className="text-xs text-ink-faint uppercase tracking-wide">Kişi</span>
@@ -591,8 +632,11 @@ export default function ComposeWhatsApp() {
               {preview.blockReason}
             </p>
           )}
+            </>
+          )}
         </div>
 
+        {composeMode === 'single' && (
         <aside className="mc-panel mc-panel-asymmetric p-4 h-fit space-y-3">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-signal" />
@@ -630,6 +674,7 @@ export default function ComposeWhatsApp() {
             )}
           </div>
         </aside>
+        )}
       </form>
     </div>
   )

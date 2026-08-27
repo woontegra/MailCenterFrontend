@@ -315,6 +315,25 @@ export const templateMediaApi = {
   },
 }
 
+export const whatsappCampaignApi = {
+  sampleCsv: () => api.get('/whatsapp/campaigns/sample-csv', { responseType: 'blob' }),
+  list: (params?: any) => api.get('/whatsapp/campaigns', { params }),
+  get: (id: number) => api.get(`/whatsapp/campaigns/${id}`),
+  recipients: (id: number, params?: any) =>
+    api.get(`/whatsapp/campaigns/${id}/recipients`, { params }),
+  previewRecipients: (data: any) => api.post('/whatsapp/campaigns/preview-recipients', data),
+  previewImport: (formData: FormData) =>
+    api.post('/whatsapp/campaigns/preview-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  launch: (data: any) => api.post('/whatsapp/campaigns/launch', data),
+  pause: (id: number) => api.post(`/whatsapp/campaigns/${id}/pause`),
+  resume: (id: number) => api.post(`/whatsapp/campaigns/${id}/resume`),
+  cancel: (id: number) => api.post(`/whatsapp/campaigns/${id}/cancel`),
+  exportResults: (id: number) =>
+    api.get(`/whatsapp/campaigns/${id}/export`, { responseType: 'blob' }),
+}
+
 export const campaignApi = {
   list: (params?: any) => api.get('/campaigns', { params }),
   get: (id: number) => api.get(`/campaigns/${id}`),

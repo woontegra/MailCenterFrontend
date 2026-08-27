@@ -46,10 +46,10 @@ export function inviteStatusLabel(code: string | null | undefined): string {
 }
 
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Onay bekliyor',
-  APPROVED: 'Onaylandı',
+  PENDING: 'Meta onayı bekleniyor',
+  APPROVED: 'Kullanıma hazır',
   REJECTED: 'Reddedildi',
-  PAUSED: 'Duraklatıldı',
+  PAUSED: 'Geçici olarak durduruldu',
   DISABLED: 'Kapalı',
   UNKNOWN: 'Durum güncelleniyor',
 }
@@ -59,7 +59,7 @@ export const APPROVAL_STATUS_HELP: Record<string, string> = {
   PENDING: 'Meta onayı bekleniyor. Onaylanana kadar gönderilemez.',
   APPROVED: 'Kullanıma hazır.',
   REJECTED: 'Meta tarafından reddedildi. Nedeni görüntüleyip düzenleyebilirsiniz.',
-  PAUSED: 'Meta tarafından geçici olarak durduruldu.',
+  PAUSED: 'Geçici olarak durduruldu.',
   UNKNOWN: 'Durum henüz Meta’dan alınamadı. Durumu yenileyin.',
   DISABLED: 'Kapalı.',
 }

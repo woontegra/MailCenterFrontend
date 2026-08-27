@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Copy, Eye, Plus, Search, Trash2, Pencil } from 'lucide-react'
+import { Copy, Eye, Loader2, Plus, RefreshCw, Search, Trash2, Pencil } from 'lucide-react'
 import { brandApi, channelConnectionApi, senderIdentityApi, templateApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { normalizeWhatsAppTemplateName } from '../utils/whatsappTemplateName'
-import { approvalStatusHelp, mailCenterRecordStatusLabel, whatsappTemplateSendabilityLabel } from '../utils/displayLabels'
+import {
+  approvalStatusHelp,
+  approvalStatusLabel,
+  mailCenterRecordStatusLabel,
+  whatsappTemplateSendabilityLabel,
+} from '../utils/displayLabels'
 import WhatsAppReadyLibrary from '../components/templates/WhatsAppReadyLibrary'
+import WhatsAppCustomTemplateModal from '../components/templates/WhatsAppCustomTemplateModal'
 
 const emptyForm = () => ({
   brand_id: '',
@@ -54,6 +60,7 @@ export default function Templates() {
   const queryClient = useQueryClient()
   const canManage = useAuthStore((s) => s.hasPermission('TEMPLATE_MANAGE'))
   const [showForm, setShowForm] = useState(false)
+  const [showWhatsAppCreate, setShowWhatsAppCreate] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
@@ -219,6 +226,17 @@ export default function Templates() {
     onError: (err: any) => setError(err.response?.data?.error || 'Kopyalanamadı'),
   })
 
+  const syncWaMutation = useMutation({
+    mutationFn: (connectionId: number) =>
+      templateApi.syncLibraryTemplates({ channelConnectionId: connectionId }),
+    onSuccess: () => {
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+    },
+    onError: (err: any) =>
+      setError(err.response?.data?.error || err.message || 'Durum yenilenemedi'),
+  })
+
   const openLegacyEdit = (tpl: any) => {
     const comps = tpl.provider_template_components
     const category =
@@ -278,10 +296,17 @@ export default function Templates() {
         {canManage && mainTab === 'mine' && (
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => navigate('/templates/new')}
+              type="button"
+              onClick={() => setShowWhatsAppCreate(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl"
             >
               <Plus className="w-4 h-4" />
+              Yeni şablon oluştur
+            </button>
+            <button
+              onClick={() => navigate('/templates/new')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-canvas-soft text-ink text-sm rounded-xl border border-canvas-line"
+            >
               E-posta şablonu
             </button>
             <button
@@ -292,7 +317,7 @@ export default function Templates() {
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-canvas-soft text-ink text-sm rounded-xl border border-canvas-line"
             >
-              SMS / WhatsApp
+              SMS şablonu
             </button>
           </div>
         )}
@@ -337,23 +362,20 @@ export default function Templates() {
         </p>
         <ul className="mt-2 space-y-0.5 text-xs text-sky-900/90">
           <li>
-            <span className="font-medium">Onay bekliyor:</span> Meta onayı bekleniyor. Onaylanana
-            kadar gönderilemez.
+            <span className="font-medium">Meta onayı bekleniyor:</span> Onaylanana kadar gönderilemez.
           </li>
           <li>
-            <span className="font-medium">Onaylandı:</span> Kullanıma hazır.
+            <span className="font-medium">Kullanıma hazır:</span> WhatsApp Yaz ve otomasyonda seçilebilir.
           </li>
           <li>
-            <span className="font-medium">Reddedildi:</span> Meta tarafından reddedildi. Nedeni
-            görüntüleyip düzenleyebilirsiniz.
+            <span className="font-medium">Reddedildi:</span> Meta tarafından reddedildi; nedeni görüntüleyin.
           </li>
           <li>
-            <span className="font-medium">Duraklatıldı:</span> Meta tarafından geçici olarak
+            <span className="font-medium">Geçici olarak durduruldu:</span> Meta tarafından geçici olarak
             durduruldu.
           </li>
           <li>
-            <span className="font-medium">Durum güncelleniyor:</span> Durum henüz Meta’dan
-            alınamadı. Durumu yenileyin.
+            <span className="font-medium">Durum güncelleniyor:</span> Durumu yenileyin.
           </li>
         </ul>
       </div>
@@ -439,9 +461,10 @@ export default function Templates() {
                       <li>
                         Onay durumu:{' '}
                         <span className="text-ink font-medium">
-                          {approvalStatusHelp(tpl.provider_approval_status)}
+                          {approvalStatusLabel(tpl.provider_approval_status)}
                         </span>
                       </li>
+                      <li className="text-ink-faint">{approvalStatusHelp(tpl.provider_approval_status)}</li>
                       <li>
                         Kullanılabilirlik:{' '}
                         <span className="text-ink font-medium">
@@ -502,6 +525,21 @@ export default function Templates() {
                   >
                     <Eye className="w-4 h-4" />
                   </button>
+                  {isWa && canManage && tpl.channel_connection_id && (
+                    <button
+                      type="button"
+                      disabled={syncWaMutation.isPending}
+                      onClick={() => syncWaMutation.mutate(Number(tpl.channel_connection_id))}
+                      className="p-2 rounded-lg hover:bg-canvas-soft"
+                      title="Durumu yenile"
+                    >
+                      {syncWaMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
                   {canManage && (
                     <>
                       <button
@@ -606,7 +644,6 @@ export default function Templates() {
               }
             >
               <option value="SMS">SMS</option>
-              <option value="WHATSAPP">WhatsApp</option>
             </select>
 
             {form.channel_type === 'SMS' && (
@@ -771,6 +808,11 @@ export default function Templates() {
           </form>
         </div>
       )}
+
+      <WhatsAppCustomTemplateModal
+        open={showWhatsAppCreate}
+        onClose={() => setShowWhatsAppCreate(false)}
+      />
     </div>
   )
 }
