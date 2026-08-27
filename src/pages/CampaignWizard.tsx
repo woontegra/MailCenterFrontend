@@ -7,6 +7,7 @@ import {
   brandApi,
   campaignApi,
   contactApi,
+  contactListApi,
   segmentApi,
   senderIdentityApi,
   tagApi,
@@ -26,7 +27,7 @@ const STEPS = [
   'Başlat',
 ]
 
-type AudienceMode = 'ALL' | 'TAG' | 'COMPANY' | 'MANUAL' | 'SEGMENT' | 'IMPORT'
+type AudienceMode = 'ALL' | 'TAG' | 'COMPANY' | 'MANUAL' | 'SEGMENT' | 'IMPORT' | 'LIST'
 
 export default function CampaignWizard() {
   const { id } = useParams()
@@ -47,6 +48,7 @@ export default function CampaignWizard() {
   const [companyName, setCompanyName] = useState('')
   const [contactIds, setContactIds] = useState<number[]>([])
   const [segmentId, setSegmentId] = useState('')
+  const [listIds, setListIds] = useState<number[]>([])
   const [importId, setImportId] = useState<number | null>(null)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMapping, setImportMapping] = useState({
@@ -123,6 +125,15 @@ export default function CampaignWizard() {
     },
   })
 
+  const { data: contactLists = [] } = useQuery({
+    queryKey: ['contact-lists-wizard'],
+    queryFn: async () => {
+      const res = await contactListApi.list({ active_only: true })
+      return Array.isArray(res.data?.data) ? res.data.data : []
+    },
+    enabled: audienceMode === 'LIST',
+  })
+
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts-list'],
     queryFn: async () => {
@@ -157,6 +168,7 @@ export default function CampaignWizard() {
     setCompanyName(aud.company_name || '')
     setContactIds(aud.contact_ids || [])
     setSegmentId(aud.segment_id ? String(aud.segment_id) : '')
+    setListIds(Array.isArray(aud.list_ids) ? aud.list_ids.map(Number).filter(Boolean) : [])
     setImportId(aud.import_id || null)
     if (loadedCampaign.scheduled_at) {
       setSendNow(false)
@@ -183,9 +195,10 @@ export default function CampaignWizard() {
       company_name: companyName,
       contact_ids: contactIds,
       segment_id: segmentId ? Number(segmentId) : undefined,
+      list_ids: listIds,
       import_id: importId || undefined,
     }),
-    [audienceMode, tagIds, companyName, contactIds, segmentId, importId]
+    [audienceMode, tagIds, companyName, contactIds, segmentId, listIds, importId]
   )
 
   const buildPatch = () => ({
@@ -234,7 +247,7 @@ export default function CampaignWizard() {
     },
     onSuccess: (data) => {
       setAudienceCount(data?.count ?? 0)
-      setImportSummary((prev: any) => prev || data?.summary || null)
+      setImportSummary(data?.summary || null)
     },
   })
 
@@ -356,6 +369,20 @@ export default function CampaignWizard() {
     setTagIds((prev) => (prev.includes(tid) ? prev.filter((x) => x !== tid) : [...prev, tid]))
   }
 
+  const toggleList = (lid: number) => {
+    setListIds((prev) => (prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid]))
+  }
+
+  const audienceModeLabel: Record<AudienceMode, string> = {
+    ALL: 'Tüm kişiler',
+    TAG: 'Etikete göre',
+    COMPANY: 'Firmaya göre',
+    MANUAL: 'Elle seç',
+    SEGMENT: 'Segment',
+    IMPORT: 'Dosya import',
+    LIST: 'Kişi listelerinden seç',
+  }
+
   return (
     <div className="min-h-screen bg-canvas flex flex-col">
       <header className="border-b border-canvas-line bg-white px-4 py-3 flex items-center justify-between gap-4">
@@ -411,9 +438,9 @@ export default function CampaignWizard() {
         {step === 2 && (
           <div className="space-y-4 mc-panel p-6">
             <div className="grid grid-cols-2 gap-2">
-              {(['ALL', 'TAG', 'COMPANY', 'MANUAL', 'SEGMENT', 'IMPORT'] as AudienceMode[]).map((m) => (
+              {(['ALL', 'TAG', 'COMPANY', 'MANUAL', 'SEGMENT', 'IMPORT', 'LIST'] as AudienceMode[]).map((m) => (
                 <button key={m} type="button" onClick={() => setAudienceMode(m)} className={`px-3 py-2 rounded-xl text-sm ${audienceMode === m ? 'bg-dock text-white' : 'bg-canvas-soft'}`}>
-                  {m === 'ALL' ? 'Tüm kişiler' : m === 'TAG' ? 'Etikete göre' : m === 'COMPANY' ? 'Firmaya göre' : m === 'MANUAL' ? 'Elle seç' : m === 'SEGMENT' ? 'Segment' : 'Dosya import'}
+                  {audienceModeLabel[m]}
                 </button>
               ))}
             </div>
@@ -445,6 +472,30 @@ export default function CampaignWizard() {
                 <option value="">Segment seçin</option>
                 {segments.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            )}
+            {audienceMode === 'LIST' && (
+              <div className="space-y-2">
+                <p className="text-xs text-ink-soft">Bir veya birden fazla liste seçin. Aynı kişi birden fazla listede olsa tek alıcı sayılır.</p>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto border border-canvas-line rounded-xl p-2">
+                  {contactLists.map((list: any) => (
+                    <button
+                      key={list.id}
+                      type="button"
+                      onClick={() => toggleList(list.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs text-left ${
+                        listIds.includes(list.id) ? 'bg-dock text-white' : 'bg-canvas-soft'
+                      }`}
+                    >
+                      {list.name}
+                      <span className="block opacity-80">{list.member_count || 0} üye</span>
+                    </button>
+                  ))}
+                  {contactLists.length === 0 && (
+                    <p className="text-sm text-ink-soft p-2">Henüz liste yok. Kişiler → Listeler bölümünden oluşturabilirsiniz.</p>
+                  )}
+                </div>
+                <p className="text-xs text-ink-faint">{listIds.length} liste seçili</p>
+              </div>
             )}
             {audienceMode === 'IMPORT' && (
               <div className="space-y-3 border border-canvas-line rounded-xl p-3">
@@ -497,8 +548,20 @@ export default function CampaignWizard() {
                 {importHeaders.length > 0 && <p className="text-xs text-ink-faint">Bulunan kolonlar: {importHeaders.join(', ')}</p>}
               </div>
             )}
-            {audienceCount != null && <p className="text-sm text-ink-soft">Tahmini uygun alıcı: <strong>{audienceCount}</strong></p>}
-            {importSummary && (
+            {audienceCount != null && <p className="text-sm text-ink-soft">Tahmini gönderilebilir alıcı: <strong>{audienceCount}</strong></p>}
+            {importSummary && audienceMode === 'LIST' && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                <span className="rounded-lg bg-canvas-soft p-2">Listedeki toplam: {importSummary.list_total ?? '—'}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Gönderilebilir: {importSummary.sendable ?? importSummary.final_total ?? '—'}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Mükerrer: {importSummary.duplicate_removed ?? 0}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">E-posta izni yok: {importSummary.no_email_permission ?? 0}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Abonelikten çıkmış: {importSummary.unsubscribed_removed ?? 0}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Geçersiz e-posta: {importSummary.invalid_removed ?? 0}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Engellenmiş: {importSummary.blocked_removed ?? 0}</span>
+                <span className="rounded-lg bg-canvas-soft p-2">Hard bounce: {importSummary.bounce_removed ?? 0}</span>
+              </div>
+            )}
+            {importSummary && audienceMode !== 'LIST' && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                 <span className="rounded-lg bg-canvas-soft p-2">İlk toplam: {importSummary.initial_total ?? importSummary.total_rows ?? '—'}</span>
                 <span className="rounded-lg bg-canvas-soft p-2">Mükerrer: {importSummary.duplicate_removed ?? importSummary.duplicate_rows ?? 0}</span>

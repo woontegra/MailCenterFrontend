@@ -10,9 +10,9 @@ import {
   Users,
   XCircle,
 } from 'lucide-react'
-import { contactApi, templateApi, whatsappCampaignApi } from '../../services/api'
+import { contactApi, contactListApi, templateApi, whatsappCampaignApi } from '../../services/api'
 
-type RecipientSource = 'contacts' | 'import' | 'paste'
+type RecipientSource = 'contacts' | 'lists' | 'import' | 'paste'
 
 type BulkSummary = {
   total: number
@@ -118,6 +118,7 @@ export default function WhatsAppBulkCampaignPanel({
   const [recipientSource, setRecipientSource] = useState<RecipientSource>('contacts')
   const [contactSearch, setContactSearch] = useState('')
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([])
+  const [selectedListIds, setSelectedListIds] = useState<number[]>([])
   const [phonesPaste, setPhonesPaste] = useState('')
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importPhoneColumn, setImportPhoneColumn] = useState('Telefon')
@@ -170,6 +171,15 @@ export default function WhatsAppBulkCampaignPanel({
         limit: 50,
       })
       return res.data
+    },
+  })
+
+  const { data: contactLists = [] } = useQuery({
+    queryKey: ['contact-lists-wa-bulk'],
+    enabled: ready && recipientSource === 'lists',
+    queryFn: async () => {
+      const res = await contactListApi.list({ active_only: true })
+      return Array.isArray(res.data?.data) ? res.data.data : []
     },
   })
 
@@ -248,12 +258,20 @@ export default function WhatsAppBulkCampaignPanel({
     setPreview(null)
   }
 
+  const toggleList = (id: number) => {
+    setSelectedListIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+    setPreview(null)
+  }
+
   const buildPreviewPayload = () => ({
     brand_id: Number(brandId),
     channel_connection_id: Number(channelConnectionId),
     template_id: Number(templateId),
     variable_mapping: variableMapping,
     contact_ids: recipientSource === 'contacts' ? selectedContactIds : undefined,
+    list_ids: recipientSource === 'lists' ? selectedListIds : undefined,
     phones_paste: recipientSource === 'paste' ? phonesPaste : undefined,
   })
 
@@ -309,6 +327,7 @@ export default function WhatsAppBulkCampaignPanel({
         template_id: Number(templateId),
         variable_mapping: variableMapping,
         contact_ids: recipientSource === 'contacts' ? selectedContactIds : undefined,
+        list_ids: recipientSource === 'lists' ? selectedListIds : undefined,
         phones_paste: recipientSource === 'paste' ? phonesPaste : undefined,
       }
       if (recipientSource === 'import' && preview?.input_rows) {
@@ -322,6 +341,7 @@ export default function WhatsAppBulkCampaignPanel({
       setPreview(null)
       setCampaignName('')
       setSelectedContactIds([])
+      setSelectedListIds([])
       setPhonesPaste('')
       setImportFile(null)
       void refetchHistory()
@@ -400,6 +420,7 @@ export default function WhatsAppBulkCampaignPanel({
           {(
             [
               ['contacts', 'Kayıtlı kişiler'],
+              ['lists', 'Kişi listelerinden seç'],
               ['import', 'Excel/CSV yükle'],
               ['paste', 'Numaraları yapıştır'],
             ] as const
@@ -474,6 +495,33 @@ export default function WhatsAppBulkCampaignPanel({
               })}
             </ul>
           )}
+        </div>
+      )}
+
+      {recipientSource === 'lists' && (
+        <div className="space-y-3 rounded-xl border border-canvas-line p-3">
+          <p className="text-xs text-ink-soft">
+            Geçerli telefonu ve WhatsApp pazarlama izni olan üyeler gönderime alınır.
+          </p>
+          <div className="flex flex-wrap gap-2 max-h-56 overflow-y-auto">
+            {contactLists.map((list: any) => (
+              <button
+                key={list.id}
+                type="button"
+                onClick={() => toggleList(list.id)}
+                className={`px-3 py-2 rounded-lg text-xs text-left ${
+                  selectedListIds.includes(list.id) ? 'bg-dock text-white' : 'border border-canvas-line'
+                }`}
+              >
+                {list.name}
+                <span className="block opacity-80">{list.member_count || 0} üye</span>
+              </button>
+            ))}
+            {contactLists.length === 0 && (
+              <p className="text-sm text-ink-soft">Henüz liste yok.</p>
+            )}
+          </div>
+          <p className="text-xs text-ink-faint">{selectedListIds.length} liste seçili</p>
         </div>
       )}
 
@@ -717,6 +765,20 @@ export default function WhatsAppBulkCampaignPanel({
                         {c.template_name || c.provider_template_name || 'Şablon'} ·{' '}
                         {campaignStatusLabel(c.status)}
                       </p>
+                      {Array.isArray(c.list_names) && c.list_names.length > 0 && (
+                        <p className="text-xs text-ink-soft mt-0.5">
+                          Listeler: {c.list_names.join(', ')}
+                        </p>
+                      )}
+                      {Array.isArray(c.list_stats) && c.list_stats.length > 0 && (
+                        <ul className="text-xs text-ink-faint mt-1 space-y-0.5">
+                          {c.list_stats.map((ls: any) => (
+                            <li key={ls.id || ls.name}>
+                              {ls.name}: {ls.total} üye · {ls.sent} gönderildi · {ls.failed} başarısız
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       <p className="text-xs mt-1">
                         Toplam {c.recipient_count || summaryJson.total || '—'} · Başarılı{' '}
                         {c.sent_count || 0} · Başarısız {c.failed_count || 0} · Bekleyen{' '}

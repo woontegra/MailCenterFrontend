@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Archive,
+  List,
   Mail,
   MessageSquare,
   Phone,
@@ -13,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { brandApi, contactApi } from '../services/api'
+import ContactListsPanel from '../components/contacts/ContactListsPanel'
 import { APP_DISPLAY_NAME } from '../config/app'
 import {
   brandNumericId,
@@ -128,6 +130,7 @@ export default function Contacts() {
     notes: '',
   })
   const [editing, setEditing] = useState(false)
+  const [pageTab, setPageTab] = useState<'contacts' | 'lists'>('contacts')
 
   const { data: brands = [] } = useQuery({
     queryKey: ['brands'],
@@ -390,12 +393,40 @@ export default function Contacts() {
             })
             setShowCreate(true)
           }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl rounded-tr-sm hover:bg-dock-raised transition-colors"
+          className={`inline-flex items-center gap-2 px-4 py-2.5 bg-dock text-white text-sm rounded-xl rounded-tr-sm hover:bg-dock-raised transition-colors ${pageTab === 'lists' ? 'hidden' : ''}`}
         >
           <Plus className="w-4 h-4" />
           Yeni kişi
         </button>
       </div>
+
+      <div className="flex gap-2 mb-4 shrink-0">
+        <button
+          type="button"
+          onClick={() => setPageTab('contacts')}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm ${
+            pageTab === 'contacts' ? 'bg-dock text-white' : 'bg-canvas-soft text-ink-soft'
+          }`}
+        >
+          <UserRound className="w-4 h-4" />
+          Kişiler
+        </button>
+        <button
+          type="button"
+          onClick={() => setPageTab('lists')}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm ${
+            pageTab === 'lists' ? 'bg-dock text-white' : 'bg-canvas-soft text-ink-soft'
+          }`}
+        >
+          <List className="w-4 h-4" />
+          Listeler
+        </button>
+      </div>
+
+      {pageTab === 'lists' ? (
+        <ContactListsPanel onSelectContact={(id) => { setPageTab('contacts'); setSelectedId(id) }} />
+      ) : (
+      <>
 
       {error && (
         <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
@@ -867,6 +898,8 @@ export default function Contacts() {
           )}
         </section>
       </div>
+      </>
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dock/40 backdrop-blur-[2px]">

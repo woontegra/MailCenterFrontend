@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Copy,
   Eye,
+  BarChart2,
   Pause,
   Play,
   Plus,
@@ -247,6 +248,20 @@ function CampaignsTab() {
                 <span>Engelli: {c.recipient_summary.blocked_removed ?? 0}</span>
                 <span>Final: {c.recipient_summary.final_total ?? c.recipient_count ?? 0}</span>
               </div>
+            )}
+            {Array.isArray(c.list_names) && c.list_names.length > 0 && (
+              <p className="text-xs text-ink-soft mt-2">
+                Kişi listeleri: {c.list_names.join(', ')}
+              </p>
+            )}
+            {Array.isArray(c.list_stats) && c.list_stats.length > 0 && (
+              <ul className="text-[11px] text-ink-faint mt-1 space-y-0.5">
+                {c.list_stats.map((ls: any) => (
+                  <li key={ls.id || ls.name}>
+                    {ls.name}: {ls.total} kişi · {ls.sent} gönderildi · {ls.failed} başarısız
+                  </li>
+                ))}
+              </ul>
             )}
             <p className="text-[11px] text-ink-faint mt-2">
               Plan: {formatTime(c.scheduled_at)} · Güncelleme: {formatTime(c.updated_at)}

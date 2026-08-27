@@ -372,6 +372,30 @@ export const suppressionApi = {
   remove: (id: number) => api.delete(`/suppressions/${id}`),
 }
 
+export const contactListApi = {
+  list: (params?: any) => api.get('/contact-lists', { params }),
+  get: (id: number) => api.get(`/contact-lists/${id}`),
+  create: (data: any) => api.post('/contact-lists', data),
+  update: (id: number, data: any) => api.patch(`/contact-lists/${id}`, data),
+  remove: (id: number) => api.delete(`/contact-lists/${id}`),
+  members: (id: number, params?: any) => api.get(`/contact-lists/${id}/members`, { params }),
+  addMembers: (id: number, data: any) => api.post(`/contact-lists/${id}/members`, data),
+  removeMember: (listId: number, contactId: number) =>
+    api.delete(`/contact-lists/${listId}/members/${contactId}`),
+  exportList: (id: number) =>
+    api.get(`/contact-lists/${id}/export`, { responseType: 'blob' }),
+  sampleCsv: () => api.get('/contact-lists/sample-csv', { responseType: 'blob' }),
+  previewImport: (id: number, formData: FormData) =>
+    api.post(`/contact-lists/${id}/imports/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  applyImport: (listId: number, importId: number) =>
+    api.post(`/contact-lists/${listId}/imports/${importId}/apply`),
+  exportImportResults: (listId: number, importId: number) =>
+    api.get(`/contact-lists/${listId}/imports/${importId}/export`, { responseType: 'blob' }),
+  previewEmailAudience: (data: any) => api.post('/contact-lists/preview-audience', data),
+}
+
 export const contactApi = {
   list: (params?: any) => api.get('/contacts', { params }),
   get: (id: number) => api.get(`/contacts/${id}`),
