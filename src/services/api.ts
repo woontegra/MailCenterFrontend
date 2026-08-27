@@ -399,9 +399,10 @@ export const contactListApi = {
   addMembers: (id: number, data: any) => api.post(`/contact-lists/${id}/members`, data),
   removeMember: (listId: number, contactId: number) =>
     api.delete(`/contact-lists/${listId}/members/${contactId}`),
-  exportList: (id: number) =>
-    api.get(`/contact-lists/${id}/export`, { responseType: 'blob' }),
+  exportList: (id: number, format: 'xlsx' | 'csv' = 'xlsx') =>
+    api.get(`/contact-lists/${id}/export`, { params: { format }, responseType: 'blob' }),
   sampleCsv: () => api.get('/contact-lists/sample-csv', { responseType: 'blob' }),
+  sampleXlsx: () => api.get('/contact-lists/sample-xlsx', { responseType: 'blob' }),
   previewImport: (id: number, formData: FormData) =>
     api.post(`/contact-lists/${id}/imports/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
