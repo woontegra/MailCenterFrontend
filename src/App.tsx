@@ -25,6 +25,7 @@ import Drafts from './pages/Drafts'
 import Deliverability from './pages/Deliverability'
 import OutboundCenter from './pages/OutboundCenter'
 import CampaignWizard from './pages/CampaignWizard'
+import CampaignReport from './pages/CampaignReport'
 import Contacts from './pages/Contacts'
 import Team from './pages/Team'
 import BillingUsage from './pages/BillingUsage'
@@ -213,6 +214,14 @@ function App() {
             element={
               <RequirePermission permission="EMAIL_SEND">
                 <CampaignWizard />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="outbound/campaigns/:id/report"
+            element={
+              <RequirePermission permission="OUTBOUND_VIEW">
+                <CampaignReport />
               </RequirePermission>
             }
           />

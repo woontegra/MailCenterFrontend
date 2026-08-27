@@ -354,6 +354,23 @@ export const campaignApi = {
     }),
   applyImport: (id: number, importId: number, data: any) =>
     api.post(`/campaigns/${id}/imports/${importId}/apply`, data),
+  analyticsSummary: (id: number) => api.get(`/campaigns/${id}/analytics/summary`),
+  analyticsRecipients: (id: number, params?: any) =>
+    api.get(`/campaigns/${id}/analytics/recipients`, { params }),
+  analyticsTimeline: (id: number, recipientId: number) =>
+    api.get(`/campaigns/${id}/analytics/recipients/${recipientId}/timeline`),
+  analyticsLinks: (id: number) => api.get(`/campaigns/${id}/analytics/links`),
+  analyticsDownloads: (id: number) => api.get(`/campaigns/${id}/analytics/downloads`),
+  saveAnalyticsList: (id: number, data: any) => api.post(`/campaigns/${id}/analytics/save-list`, data),
+  exportAnalyticsSummary: (id: number) =>
+    api.get(`/campaigns/${id}/analytics/export/summary`, { responseType: 'blob' }),
+  exportAnalyticsRecipients: (id: number, filter?: string) =>
+    api.get(`/campaigns/${id}/analytics/export/recipients`, {
+      params: filter ? { filter } : undefined,
+      responseType: 'blob',
+    }),
+  exportAnalyticsLinks: (id: number) =>
+    api.get(`/campaigns/${id}/analytics/export/links`, { responseType: 'blob' }),
 }
 
 export const segmentApi = {

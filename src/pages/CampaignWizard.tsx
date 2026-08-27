@@ -630,6 +630,11 @@ export default function CampaignWizard() {
         {step === 8 && (
           <div className="space-y-4 mc-panel p-6">
             <h2 className="font-medium text-ink">Son kontrol</h2>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+              <p>Açılma verileri e-posta istemcilerinin gizlilik özellikleri nedeniyle yaklaşık olabilir. Düz metin e-postalarda açılma ölçülemez.</p>
+              <p>Normal e-posta eki olarak eklenen dosyaların indirilip indirilmediği takip edilemez. Takip istiyorsanız “Takip edilebilir indirme bağlantısı” kullanın.</p>
+              <p>SMTP sağlayıcımız gerçek teslim kanıtı vermediği sürece raporda “Gönderim sunucusunca kabul edildi” gösterilir; “Teslim edildi” otomatik varsayılmaz.</p>
+            </div>
             <ul className="text-sm space-y-1 text-ink-soft">
               <li>Kampanya: {name}</li>
               <li>Marka: {brands.find((b: any) => String(b.id) === brandId)?.name || '—'}</li>

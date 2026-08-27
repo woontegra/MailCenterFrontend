@@ -267,6 +267,7 @@ function CampaignsTab() {
               Plan: {formatTime(c.scheduled_at)} · Güncelleme: {formatTime(c.updated_at)}
             </p>
             <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-canvas-line/60">
+              <button onClick={() => navigate(`/outbound/campaigns/${c.id}/report`)} className="p-2 rounded-lg hover:bg-canvas-soft" title="Kampanya raporu"><BarChart2 className="w-4 h-4" /></button>
               {canEdit && canManage && (
                 <button onClick={() => navigate(`/outbound/campaigns/${c.id}/edit`)} className="p-2 rounded-lg hover:bg-canvas-soft" title="Düzenle"><Eye className="w-4 h-4" /></button>
               )}
