@@ -113,10 +113,16 @@ export const channelConnectionApi = {
     onboardingMode?: 'WHATSAPP_BUSINESS_APP_ONBOARDING' | 'STANDARD'
     preferredPhone?: string
   }) => api.post('/channel-connections/whatsapp/embedded-signup/complete', data),
-  syncWhatsAppTemplates: (id: number) =>
-    api.post(`/channel-connections/${id}/whatsapp/sync-templates`),
-  ensureWhatsAppSender: (id: number) =>
-    api.post(`/channel-connections/${id}/ensure-whatsapp-sender`),
+  syncWhatsAppTemplates: (id: number, brandId?: number) =>
+    api.post(`/channel-connections/${id}/whatsapp/sync-templates`, brandId ? { brand_id: brandId } : {}),
+  ensureWhatsAppSender: (id: number, data?: { brand_id?: number }) =>
+    api.post(`/channel-connections/${id}/ensure-whatsapp-sender`, data || {}),
+  listShareableWhatsAppLines: (brandId: number) =>
+    api.get('/channel-connections/whatsapp/shareable-lines', { params: { brand_id: brandId } }),
+  shareWhatsAppWithBrand: (connectionId: number, brandId: number) =>
+    api.post(`/channel-connections/${connectionId}/share-with-brand`, { brand_id: brandId }),
+  unshareWhatsAppFromBrand: (connectionId: number, brandId: number) =>
+    api.delete(`/channel-connections/${connectionId}/share-with-brand/${brandId}`),
   setWhatsAppDefaultSender: (id: number) =>
     api.post(`/channel-connections/${id}/whatsapp/set-default-sender`),
   verifyWhatsApp: (id: number) => api.post(`/channel-connections/${id}/whatsapp/verify`),

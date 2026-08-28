@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Send } from 'lucide-react'
 import { brandApi, channelConnectionApi, templateApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
-import { approvalStatusHelp, approvalStatusLabel } from '../../utils/displayLabels'
+import { whatsappTemplateStatusDisplay } from '../../utils/displayLabels'
 
 const CATEGORY_LABELS: Record<string, string> = {
   UTILITY: 'Yardımcı',
@@ -43,6 +43,9 @@ type LibraryItem = {
     status: string
     rejectionReason: string | null
     canSend: boolean
+    displayLabel?: string
+    displayHelp?: string
+    qualityPending?: boolean
   }
 }
 
@@ -279,6 +282,14 @@ export default function WhatsAppReadyLibrary() {
           <ul className="grid gap-2.5 sm:grid-cols-2">
             {items.map((item) => {
               const status = item.installation?.status
+              const installDisplay = item.installation
+                ? whatsappTemplateStatusDisplay({
+                    provider_approval_status: item.installation.status,
+                    provider_rejection_reason: item.installation.rejectionReason,
+                  })
+                : null
+              const cardLabel =
+                item.installation?.displayLabel || installDisplay?.label || null
               const selectedCard = item.key === selectedKey
               return (
                 <li key={item.key}>
@@ -308,8 +319,7 @@ export default function WhatsAppReadyLibrary() {
                               : 'text-amber-700'
                         }`}
                       >
-                        {approvalStatusLabel(status)}
-                        {item.installation?.canSend ? ' · Gönderilebilir' : ''}
+                        {cardLabel}
                       </p>
                     ) : (
                       <p className="text-[11px] mt-2 text-ink-faint">Henüz eklenmedi</p>
@@ -374,14 +384,22 @@ export default function WhatsAppReadyLibrary() {
                   ))}
                 </div>
 
-                {selected.installation && (
+                {selected.installation && (() => {
+                  const installDisplay = whatsappTemplateStatusDisplay({
+                    provider_approval_status: selected.installation.status,
+                    provider_rejection_reason: selected.installation.rejectionReason,
+                  })
+                  const label =
+                    selected.installation.displayLabel || installDisplay.label
+                  const help =
+                    selected.installation.displayHelp || installDisplay.help
+                  return (
                   <div className="rounded-xl border border-canvas-line px-3 py-2.5 space-y-1">
                     <p className="text-sm text-ink">
                       Durum:{' '}
-                      <span className="font-medium">
-                          {approvalStatusHelp(selected.installation.status)}
-                        </span>
+                      <span className="font-medium">{label}</span>
                     </p>
+                    <p className="text-xs text-ink-faint">{help}</p>
                     {selected.installation.status === 'REJECTED' &&
                       selected.installation.rejectionReason && (
                         <p className="text-sm text-red-600">
@@ -400,7 +418,8 @@ export default function WhatsAppReadyLibrary() {
                       </p>
                     )}
                   </div>
-                )}
+                  )
+                })()}
 
                 <div className="flex flex-wrap gap-2">
                   {canSubmit && (

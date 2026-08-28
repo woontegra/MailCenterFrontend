@@ -123,8 +123,19 @@ export default function Channels() {
   const isLoading = brandsLoading || connectionsLoading
 
   const rows = useMemo(() => {
+    const connectionVisibleForBrand = (c: any, brandId: number) => {
+      if (Number(c.brand_id) === brandId) return true
+      const shared = c.shared_brand_ids
+      if (Array.isArray(shared)) {
+        return shared.some((id: any) => Number(id) === brandId)
+      }
+      return false
+    }
+
     return visibleBrands.map((brand: any) => {
-      const brandConnections = connections.filter((c: any) => Number(c.brand_id) === Number(brand.id))
+      const brandConnections = connections.filter((c: any) =>
+        connectionVisibleForBrand(c, Number(brand.id))
+      )
       const emailConn = brandConnections.find((c: any) => c.channel_type === 'EMAIL') || null
       const smsConn = brandConnections.find((c: any) => c.channel_type === 'SMS') || null
       const waConn = brandConnections.find((c: any) => c.channel_type === 'WHATSAPP') || null

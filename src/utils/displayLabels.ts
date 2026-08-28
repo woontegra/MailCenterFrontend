@@ -47,7 +47,7 @@ export function inviteStatusLabel(code: string | null | undefined): string {
 
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
   PENDING: 'Meta onayı bekleniyor',
-  APPROVED: 'Kullanıma hazır',
+  APPROVED: 'Onaylandı · Gönderilebilir',
   REJECTED: 'Reddedildi',
   PAUSED: 'Geçici olarak durduruldu',
   DISABLED: 'Kapalı',
@@ -57,7 +57,7 @@ export const APPROVAL_STATUS_LABELS: Record<string, string> = {
 /** Longer user-facing explanations for WhatsApp template approval states. */
 export const APPROVAL_STATUS_HELP: Record<string, string> = {
   PENDING: 'Meta onayı bekleniyor. Onaylanana kadar gönderilemez.',
-  APPROVED: 'Kullanıma hazır.',
+  APPROVED: 'Gönderilebilir.',
   REJECTED: 'Meta tarafından reddedildi. Nedeni görüntüleyip düzenleyebilirsiniz.',
   PAUSED: 'Geçici olarak durduruldu.',
   UNKNOWN: 'Durum henüz Meta’dan alınamadı. Durumu yenileyin.',
@@ -77,19 +77,91 @@ export function approvalStatusHelp(code: string | null | undefined): string {
   )
 }
 
+function parseTemplateComponents(raw: unknown): Record<string, unknown> {
+  if (!raw) return {}
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'object' && parsed ? (parsed as Record<string, unknown>) : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+function isQualityScorePending(approval: string, components: unknown): boolean {
+  if (String(approval).toUpperCase() !== 'APPROVED') return false
+  const obj = parseTemplateComponents(components)
+  const qs = obj.quality_score as { score?: string; status?: string } | null | undefined
+  if (!qs || typeof qs !== 'object') return true
+  const score = String(qs.score || '').toUpperCase()
+  const status = String(qs.status || '').toUpperCase()
+  if (status === 'PENDING') return true
+  if (!score || score === 'UNKNOWN') return true
+  return false
+}
+
+/** WhatsApp template card label/help — separates Meta approval from quality score. */
+export function whatsappTemplateStatusDisplay(tpl: {
+  provider_approval_status?: string | null
+  provider_template_components?: unknown
+  provider_rejection_reason?: string | null
+}): { label: string; help: string; canSend: boolean; qualityPending: boolean } {
+  const approval = String(tpl.provider_approval_status || 'UNKNOWN').toUpperCase()
+  const qualityPending = isQualityScorePending(approval, tpl.provider_template_components)
+
+  if (approval === 'APPROVED') {
+    return {
+      label: 'Onaylandı · Gönderilebilir',
+      help: qualityPending ? 'Kalite puanı henüz oluşmadı.' : 'Gönderilebilir.',
+      canSend: true,
+      qualityPending,
+    }
+  }
+  if (approval === 'PENDING') {
+    return {
+      label: 'Meta onayı bekleniyor',
+      help: 'Onaylanana kadar gönderilemez.',
+      canSend: false,
+      qualityPending: false,
+    }
+  }
+  if (approval === 'REJECTED') {
+    const reason = String(tpl.provider_rejection_reason || '').trim()
+    return {
+      label: 'Reddedildi',
+      help: reason || APPROVAL_STATUS_HELP.REJECTED,
+      canSend: false,
+      qualityPending: false,
+    }
+  }
+  if (approval === 'PAUSED') {
+    return {
+      label: approvalStatusLabel(approval),
+      help: APPROVAL_STATUS_HELP.PAUSED,
+      canSend: false,
+      qualityPending: false,
+    }
+  }
+  return {
+    label: approvalStatusLabel(approval),
+    help: APPROVAL_STATUS_HELP.UNKNOWN,
+    canSend: false,
+    qualityPending: false,
+  }
+}
+
 /** WhatsApp template send eligibility for template cards. */
 export function whatsappTemplateSendabilityLabel(tpl: {
   is_active?: boolean | null
   is_draft?: boolean | null
   provider_approval_status?: string | null
   provider_template_name?: string | null
+  provider_template_components?: unknown
 }): string {
-  if (tpl.is_draft === true) return 'Gönderilemez'
-  if (tpl.is_active === false) return 'Gönderilemez'
-  const approval = String(tpl.provider_approval_status || '').toUpperCase()
-  if (approval !== 'APPROVED') return 'Gönderilemez'
-  if (!String(tpl.provider_template_name || '').trim()) return 'Gönderilemez'
-  return 'Gönderilebilir'
+  return whatsappTemplateStatusDisplay(tpl).canSend ? 'Gönderilebilir' : 'Gönderilemez'
 }
 
 export function mailCenterRecordStatusLabel(tpl: {

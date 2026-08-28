@@ -6,10 +6,9 @@ import { brandApi, channelConnectionApi, senderIdentityApi, templateApi } from '
 import { useAuthStore } from '../store/authStore'
 import { normalizeWhatsAppTemplateName } from '../utils/whatsappTemplateName'
 import {
-  approvalStatusHelp,
-  approvalStatusLabel,
   mailCenterRecordStatusLabel,
   whatsappTemplateSendabilityLabel,
+  whatsappTemplateStatusDisplay,
 } from '../utils/displayLabels'
 import WhatsAppReadyLibrary from '../components/templates/WhatsAppReadyLibrary'
 import WhatsAppCustomTemplateModal from '../components/templates/WhatsAppCustomTemplateModal'
@@ -450,7 +449,9 @@ export default function Templates() {
                   {tpl.subject && (
                     <p className="text-sm text-ink-soft mt-1 truncate">Konu: {tpl.subject}</p>
                   )}
-                  {isWa && (
+                  {isWa && (() => {
+                    const waStatus = whatsappTemplateStatusDisplay(tpl)
+                    return (
                     <ul className="mt-2 space-y-0.5 text-[11px] text-ink-soft">
                       <li>
                         MailCenter kaydı:{' '}
@@ -461,10 +462,10 @@ export default function Templates() {
                       <li>
                         Onay durumu:{' '}
                         <span className="text-ink font-medium">
-                          {approvalStatusLabel(tpl.provider_approval_status)}
+                          {waStatus.label}
                         </span>
                       </li>
-                      <li className="text-ink-faint">{approvalStatusHelp(tpl.provider_approval_status)}</li>
+                      <li className="text-ink-faint">{waStatus.help}</li>
                       <li>
                         Kullanılabilirlik:{' '}
                         <span className="text-ink font-medium">
@@ -482,7 +483,8 @@ export default function Templates() {
                         <span className="text-ink font-medium">{templateCategory(tpl)}</span>
                       </li>
                     </ul>
-                  )}
+                    )
+                  })()}
                   <p className="text-[11px] text-ink-faint mt-2">
                     Güncelleme: {formatDate(tpl.updated_at || tpl.created_at)}
                   </p>

@@ -138,21 +138,27 @@ export default function ChannelWhatsAppSetup() {
   })
 
   const { data: connections = [], refetch: refetchConnections } = useQuery({
-    queryKey: ['channel-connections', 'WHATSAPP'],
+    queryKey: ['channel-connections', 'WHATSAPP', brandId],
+    enabled: Boolean(brandId),
     queryFn: async () => {
-      const res = await channelConnectionApi.list({ channel_type: 'WHATSAPP' })
+      const res = await channelConnectionApi.list({
+        channel_type: 'WHATSAPP',
+        brand_id: brandId,
+      })
       return Array.isArray(res.data) ? res.data : []
     },
   })
 
-  const brandConnections = useMemo(() => {
-    if (!brandId) return [] as any[]
-    return connections.filter(
-      (c: any) =>
-        String(c.brand_id) === String(brandId) &&
-        String(c.channel_type || '').toUpperCase() === 'WHATSAPP'
-    )
-  }, [connections, brandId])
+  const { data: shareableLines = [], refetch: refetchShareable } = useQuery({
+    queryKey: ['whatsapp-shareable-lines', brandId],
+    enabled: Boolean(brandId),
+    queryFn: async () => {
+      const res = await channelConnectionApi.listShareableWhatsAppLines(Number(brandId))
+      return Array.isArray(res.data?.data) ? res.data.data : []
+    },
+  })
+
+  const brandConnections = useMemo(() => connections, [connections])
 
   const connection = useMemo(() => {
     if (!brandConnections.length) return null
@@ -442,7 +448,8 @@ export default function ChannelWhatsAppSetup() {
   })
 
   const syncMutation = useMutation({
-    mutationFn: (id: number) => channelConnectionApi.syncWhatsAppTemplates(id),
+    mutationFn: ({ id, brand }: { id: number; brand: number }) =>
+      channelConnectionApi.syncWhatsAppTemplates(id, brand),
     onSuccess: (res) => {
       setInfo(
         `Şablonlar senkronize edildi: ${res.data?.synced ?? 0} kayıt, ${res.data?.approved ?? 0} onaylı`
@@ -469,6 +476,7 @@ export default function ChannelWhatsAppSetup() {
         queryClient.invalidateQueries({ queryKey: ['channel-connections'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-usage'] }),
         refetchConnections(),
+        refetchShareable(),
       ])
       addToast({ type: 'success', title: 'Bağlantı kaldırıldı', message })
     },
@@ -477,6 +485,44 @@ export default function ChannelWhatsAppSetup() {
       setError(message)
       addToast({ type: 'error', title: 'Bağlantı kaldırılamadı', message })
     },
+  })
+
+  const [selectedShareLineId, setSelectedShareLineId] = useState<string>('')
+
+  const shareLineMutation = useMutation({
+    mutationFn: async () => {
+      if (!brandId || !selectedShareLineId) throw new Error('Hat seçin')
+      return channelConnectionApi.shareWhatsAppWithBrand(Number(selectedShareLineId), Number(brandId))
+    },
+    onSuccess: async (res) => {
+      const owner = res.data?.data?.owner_brand_name || 'başka marka'
+      setInfo(
+        `Bu hat ${owner} markası tarafından bağlanmıştır ve ${brands.find((b: any) => String(b.id) === String(brandId))?.name || 'seçili marka'} markasında da kullanılacaktır.`
+      )
+      setError('')
+      setSelectedShareLineId('')
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-connections'] }),
+        refetchConnections(),
+        refetchShareable(),
+      ])
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Hat paylaşılamadı')),
+  })
+
+  const unshareMutation = useMutation({
+    mutationFn: ({ connectionId, targetBrandId }: { connectionId: number; targetBrandId: number }) =>
+      channelConnectionApi.unshareWhatsAppFromBrand(connectionId, targetBrandId),
+    onSuccess: async () => {
+      setInfo('Hat bu markadan kaldırıldı. Ana markadaki bağlantı etkilenmedi.')
+      setError('')
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-connections'] }),
+        refetchConnections(),
+        refetchShareable(),
+      ])
+    },
+    onError: (err: any) => setError(channelSetupApiError(err, 'Paylaşım kaldırılamadı')),
   })
 
   const setDefaultMutation = useMutation({
@@ -743,6 +789,45 @@ export default function ChannelWhatsAppSetup() {
             </select>
           </label>
 
+          <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2.5 space-y-2">
+            <p className="text-sm text-sky-900 font-medium">Mevcut WhatsApp hattını kullan</p>
+            <p className="text-xs text-sky-900/80 leading-snug">
+              Kiracınızdaki başka bir markada zaten bağlı olan gerçek hattı Meta penceresi açmadan
+              bu markada kullanabilirsiniz.
+            </p>
+            {shareableLines.length === 0 ? (
+              <p className="text-xs text-ink-soft">
+                {brandId
+                  ? 'Bu markada kullanılabilecek başka aktif hat bulunamadı.'
+                  : 'Önce marka seçin.'}
+              </p>
+            ) : (
+              <>
+                <select
+                  className="w-full px-3 py-2 rounded-xl border border-canvas-line bg-white text-sm"
+                  value={selectedShareLineId}
+                  onChange={(e) => setSelectedShareLineId(e.target.value)}
+                >
+                  <option value="">Hat seçin</option>
+                  {shareableLines.map((line: any) => (
+                    <option key={line.id} value={line.id}>
+                      {line.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!selectedShareLineId || shareLineMutation.isPending || !brandId}
+                  onClick={() => shareLineMutation.mutate()}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-dock text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {shareLineMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Bu markada kullan
+                </button>
+              </>
+            )}
+          </div>
+
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 space-y-1">
             <p className="text-sm text-emerald-900 font-medium flex items-center gap-2">
               <Smartphone className="w-4 h-4 shrink-0" />
@@ -811,16 +896,12 @@ export default function ChannelWhatsAppSetup() {
                   c.settings?.business_phone ||
                   '—'
                 const name = c.settings?.verified_name || c.display_name || 'WhatsApp'
-                const ctype = String(
-                  c.connection_type ||
-                    c.settings?.connection_type ||
-                    c.settings?.connection_method ||
-                    ''
-                )
                 const selected = String(c.id) === String(managedConnectionId)
                 const statusUpper = String(c.status || '').toUpperCase()
                 const isActive = statusUpper === 'ACTIVE'
                 const isDisabled = statusUpper === 'DISABLED'
+                const isShared = Boolean(c.is_shared)
+                const ownerBrandName = c.owner_brand_name || c.brand_name || 'Ana marka'
                 return (
                   <li
                     key={c.id}
@@ -843,16 +924,14 @@ export default function ChannelWhatsAppSetup() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-ink truncate">{name}</p>
                           <p className="text-sm text-ink truncate">{phone}</p>
-                          <p className="text-[11px] text-ink-faint mt-1 break-all leading-snug">
-                            ID {c.id} · {c.status}
-                            {ctype ? ` · ${ctype}` : ''}
-                            {c.phone_number_id || c.settings?.phone_number_id
-                              ? ` · PNID ${c.phone_number_id || c.settings?.phone_number_id}`
-                              : ''}
-                            {c.waba_id || c.settings?.waba_id
-                              ? ` · WABA ${c.waba_id || c.settings?.waba_id}`
-                              : ''}
-                          </p>
+                          {isShared && (
+                            <p className="text-[11px] text-ink-soft mt-1 leading-snug">
+                              Bu hat {ownerBrandName} markası tarafından bağlanmıştır ve{' '}
+                              {brands.find((b: any) => String(b.id) === String(brandId))?.name ||
+                                'bu marka'}{' '}
+                              markasında da kullanılacaktır.
+                            </p>
+                          )}
                         </div>
                         {isActive ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
@@ -867,30 +946,56 @@ export default function ChannelWhatsAppSetup() {
                       </div>
                     </button>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      <button
-                        type="button"
-                        disabled={!isActive || setDefaultMutation.isPending}
-                        onClick={() => setDefaultMutation.mutate(Number(c.id))}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs disabled:opacity-50"
-                      >
-                        Varsayılan gönderici yap
-                      </button>
-                      <button
-                        type="button"
-                        disabled={disconnectMutation.isPending}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setDisconnectTarget({
-                            id: Number(c.id),
-                            label: `${name} · ${phone}`,
-                          })
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-red-200 text-red-600 text-xs"
-                      >
-                        <Unplug className="w-3.5 h-3.5" />
-                        Bağlantıyı kaldır
-                      </button>
+                      {!isShared && (
+                        <button
+                          type="button"
+                          disabled={!isActive || setDefaultMutation.isPending}
+                          onClick={() => setDefaultMutation.mutate(Number(c.id))}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs disabled:opacity-50"
+                        >
+                          Varsayılan gönderici yap
+                        </button>
+                      )}
+                      {isShared ? (
+                        <button
+                          type="button"
+                          disabled={unshareMutation.isPending || !brandId}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            if (
+                              window.confirm(
+                                'Bu hat yalnızca bu markadan kaldırılacak. Ana markadaki bağlantı etkilenmez. Devam edilsin mi?'
+                              )
+                            ) {
+                              unshareMutation.mutate({
+                                connectionId: Number(c.id),
+                                targetBrandId: Number(brandId),
+                              })
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-200 text-amber-800 text-xs"
+                        >
+                          Bu markadan kaldır
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={disconnectMutation.isPending}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setDisconnectTarget({
+                              id: Number(c.id),
+                              label: `${name} · ${phone}`,
+                            })
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-red-200 text-red-600 text-xs"
+                        >
+                          <Unplug className="w-3.5 h-3.5" />
+                          Bağlantıyı kaldır
+                        </button>
+                      )}
                     </div>
                   </li>
                 )
@@ -904,7 +1009,8 @@ export default function ChannelWhatsAppSetup() {
           {connection ? (
             <>
               <p className="text-xs text-ink-soft">
-                Seçili bağlantı #{connection.id}
+                Seçili hat: {connection.settings?.verified_name || connection.display_name || 'WhatsApp'}
+                {connection.phone_number ? ` · ${connection.phone_number}` : ''}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -922,9 +1028,21 @@ export default function ChannelWhatsAppSetup() {
                 </button>
                 <button
                   type="button"
-                  disabled={syncMutation.isPending || !connection.id}
-                  onClick={() => syncMutation.mutate(Number(connection.id))}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                  disabled={
+                    syncMutation.isPending ||
+                    !connection.id ||
+                    Boolean(connection.is_shared) ||
+                    !brandId
+                  }
+                  onClick={() =>
+                    syncMutation.mutate({ id: Number(connection.id), brand: Number(brandId) })
+                  }
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm disabled:opacity-50"
+                  title={
+                    connection.is_shared
+                      ? 'Senkronizasyon yalnızca hattın bağlı olduğu markadan yapılabilir'
+                      : undefined
+                  }
                 >
                   {syncMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

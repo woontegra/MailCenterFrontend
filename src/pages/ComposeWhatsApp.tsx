@@ -11,6 +11,7 @@ import {
   isMetaTestWhatsAppPhone,
   pickDefaultWhatsAppConnection,
 } from '../utils/whatsappSenderSelection'
+import { whatsappTemplateStatusDisplay } from '../utils/displayLabels'
 
 function newIdempotencyKey() {
   return `wa_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -225,7 +226,9 @@ export default function ComposeWhatsApp() {
       setEnsuringSender(true)
       setSenderError('')
       try {
-        const res = await channelConnectionApi.ensureWhatsAppSender(Number(channelConnectionId))
+        const res = await channelConnectionApi.ensureWhatsAppSender(Number(channelConnectionId), {
+          brand_id: Number(brandId),
+        })
         const data = res.data?.data
         if (cancelled) return
         if (!data?.sender_identity_id) {
@@ -645,12 +648,14 @@ export default function ComposeWhatsApp() {
           <p className="text-sm text-ink whitespace-pre-wrap">
             {preview?.renderedText || messageContent || '—'}
           </p>
-          {preview?.template && (
+          {preview?.template && (() => {
+            const tplDisplay = whatsappTemplateStatusDisplay(preview.template)
+            return (
             <p className="text-xs text-ink-faint">
-              Dil: {preview.template.provider_template_language || '—'} ·{' '}
-              {preview.template.provider_approval_status}
+              Dil: {preview.template.provider_template_language || '—'} · {tplDisplay.label}
             </p>
-          )}
+            )
+          })()}
           <div className="pt-2 border-t border-canvas-line text-sm">
             <p className="text-xs uppercase tracking-wide text-ink-faint mb-1">İzin</p>
             {preview?.preference ? (
