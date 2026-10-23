@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { brandApi, channelConnectionApi, templateApi } from '../services/api'
 import { channelSetupApiError } from '../utils/channelSetupErrors'
+import { disconnectReasonLabel, isMetaTestWhatsAppPhone } from '../utils/whatsappCoexistence'
+import CoexistenceSyncPanel from '../components/whatsapp/CoexistenceSyncPanel'
 import { useNotificationStore } from '../store/notificationStore'
 import {
   buildEmbeddedSignupLoginOptions,
@@ -97,6 +99,8 @@ export default function ChannelWhatsAppSetup() {
   const [disconnectTarget, setDisconnectTarget] = useState<DisconnectTarget | null>(null)
 
   const sessionRef = useRef<ParsedWaEmbeddedSignupEvent | null>(null)
+  const reconnectTargetRef = useRef<number | null>(null)
+  const [reconnectTarget, setReconnectTarget] = useState<DisconnectTarget | null>(null)
   const completingRef = useRef(false)
   const onboardingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -291,17 +295,23 @@ export default function ChannelWhatsAppSetup() {
       authorizationCode: string
       sessionInfo?: Record<string, unknown> | null
       onboardingMode: EmbeddedSignupMode
-      preferredPhone?: string
+      connectionId?: number
     }) => channelConnectionApi.completeEmbeddedSignup(payload),
     onSuccess: async (res) => {
       const mode = res.data?.connectionType || activeMode
-      setInfo(
-        mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' || mode === 'COEXISTENCE'
-          ? 'WhatsApp Business numarası MailCenter’a bağlandı (uygulama silinmedi).'
-          : 'WhatsApp Embedded Signup tamamlandı. Bağlantı aktif.'
-      )
+      const coexistence = mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' || mode === 'COEXISTENCE'
+      const warnings: string[] = Array.isArray(res.data?.warnings) ? res.data.warnings : []
+      const base = coexistence
+        ? res.data?.reconnected
+          ? 'Mevcut WhatsApp bağlantısı Coexistence ile yeniden kuruldu. Kişi ve geçmiş eşitlemesini 24 saat içinde başlatın.'
+          : 'WhatsApp Business numarası MailCenter’a bağlandı (uygulama silinmedi). Kişi ve geçmiş eşitlemesini 24 saat içinde başlatın.'
+        : 'WhatsApp Embedded Signup tamamlandı. Bağlantı aktif.'
+      setInfo(warnings.length ? `${base} Uyarı: ${warnings.join(' ')}` : base)
       setError('')
+      const savedId = res.data?.connection?.id
+      if (savedId) setManagedConnectionId(String(savedId))
       queryClient.invalidateQueries({ queryKey: ['channel-connections'] })
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-coexistence-status'] })
       await refetchConnections()
     },
     onError: (err: any) => {
@@ -351,14 +361,15 @@ export default function ChannelWhatsAppSetup() {
             }
           : null
 
+        const reconnectConnectionId = reconnectTargetRef.current
         completeMutation.mutate(
           {
             brandId: Number(brandId),
             authorizationCode: code,
             sessionInfo,
             onboardingMode: mode,
-            ...(mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING'
-              ? { preferredPhone: '+905323171755' }
+            ...(mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' && reconnectConnectionId
+              ? { connectionId: reconnectConnectionId }
               : {}),
           },
           {
@@ -377,7 +388,7 @@ export default function ChannelWhatsAppSetup() {
   )
 
   const launchEmbeddedSignup = useCallback(
-    (mode: EmbeddedSignupMode) => {
+    (mode: EmbeddedSignupMode, reconnectConnectionId: number | null = null) => {
       setError('')
       setInfo('')
       if (!frontendMetaReady || !setupStatus?.embeddedSignupReady) {
@@ -397,6 +408,8 @@ export default function ChannelWhatsAppSetup() {
       }
 
       sessionRef.current = null
+      reconnectTargetRef.current =
+        mode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' ? reconnectConnectionId : null
       setActiveMode(mode)
       setConnecting(true)
       clearOnboardingTimeout()
@@ -834,9 +847,10 @@ export default function ChannelWhatsAppSetup() {
               Yeni WhatsApp bağlantısı ekle
             </p>
             <p className="text-xs text-emerald-900/80 leading-snug">
-              Test numarası zaten bağlı olsa bile mevcut WhatsApp Business numaranızı (ör.
-              +90 532 317 17 55) ayrıca bağlayabilirsiniz. Numara uygulamadan silinmez;
-              Cloud API ile birlikte (coexistence) çalışır.
+              Test numarası zaten bağlı olsa bile mevcut WhatsApp Business numaranızı ayrıca
+              bağlayabilirsiniz. Numara uygulamadan silinmez; Cloud API ile birlikte (coexistence)
+              çalışır. Kopmuş bir bağlantı için aşağıdaki listeden “Yeniden bağla (Coexistence)”
+              seçeneğini kullanın.
             </p>
           </div>
 
@@ -902,6 +916,11 @@ export default function ChannelWhatsAppSetup() {
                 const isDisabled = statusUpper === 'DISABLED'
                 const isShared = Boolean(c.is_shared)
                 const ownerBrandName = c.owner_brand_name || c.brand_name || 'Ana marka'
+                const coexistenceDisconnected = c.settings?.coexistence_status === 'DISCONNECTED'
+                const canReconnectCoexistence =
+                  !isShared &&
+                  Boolean(c.settings?.phone_number_id && c.settings?.waba_id) &&
+                  !isMetaTestWhatsAppPhone(phone)
                 return (
                   <li
                     key={c.id}
@@ -944,8 +963,35 @@ export default function ChannelWhatsAppSetup() {
                           </span>
                         ) : null}
                       </div>
+                      {coexistenceDisconnected && (
+                        <p className="text-[11px] text-red-600 mt-1 leading-snug">
+                          WhatsApp Business uygulaması bağlantısı koptu:{' '}
+                          {disconnectReasonLabel(c.settings?.coexistence_disconnection?.reason)}
+                        </p>
+                      )}
                     </button>
                     <div className="flex flex-wrap gap-1.5 mt-2">
+                      {canReconnectCoexistence && (
+                        <button
+                          type="button"
+                          disabled={metaButtonsDisabled}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setReconnectTarget({ id: Number(c.id), label: `${name} · ${phone}` })
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#1877F2] text-[#1877F2] text-xs disabled:opacity-50"
+                        >
+                          {connecting &&
+                          activeMode === 'WHATSAPP_BUSINESS_APP_ONBOARDING' &&
+                          reconnectTargetRef.current === Number(c.id) ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          )}
+                          Yeniden bağla (Coexistence)
+                        </button>
+                      )}
                       {!isShared && (
                         <button
                           type="button"
@@ -1094,6 +1140,8 @@ export default function ChannelWhatsAppSetup() {
                   </p>
                 )}
               </div>
+
+              <CoexistenceSyncPanel connectionId={Number(connection.id)} />
             </>
           ) : (
             <p className="text-sm text-ink-soft bg-canvas-soft/60 border border-canvas-line rounded-xl px-3 py-3">
@@ -1200,6 +1248,59 @@ export default function ChannelWhatsAppSetup() {
           Kanal Bağlantıları’na dön
         </Link>
       </p>
+
+      {reconnectTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wa-reconnect-title"
+          onClick={() => setReconnectTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white border border-canvas-line p-5 shadow-lg space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="wa-reconnect-title" className="font-semibold text-ink text-lg">
+              Yeniden bağla (Coexistence)
+            </h3>
+            <div className="text-sm text-ink-soft space-y-2">
+              <p>
+                <span className="text-ink font-medium">{reconnectTarget.label}</span> için Meta
+                penceresi açılacak. WhatsApp Business uygulamasında gösterilen QR kodu telefonla
+                okutmanız istenir; numara uygulamadan silinmez.
+              </p>
+              <p>
+                Yalnızca bu bağlantının numarası kabul edilir. Meta farklı bir numara döndürürse mevcut
+                bağlantı ve token değiştirilmez. Şablonlar ve geçmiş mesajlar korunur.
+              </p>
+              <p>Bağlantıdan sonra kişi ve geçmiş eşitlemesi için 24 saatiniz olur.</p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setReconnectTarget(null)}
+                className="px-4 py-2 rounded-xl border text-sm"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={metaButtonsDisabled}
+                onClick={() => {
+                  const id = reconnectTarget.id
+                  setReconnectTarget(null)
+                  setManagedConnectionId(String(id))
+                  launchEmbeddedSignup('WHATSAPP_BUSINESS_APP_ONBOARDING', id)
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1877F2] text-white text-sm disabled:opacity-50"
+              >
+                Meta ile yeniden bağla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {disconnectTarget && (
         <div

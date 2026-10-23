@@ -111,8 +111,14 @@ export const channelConnectionApi = {
     authorizationCode: string
     sessionInfo?: Record<string, unknown> | null
     onboardingMode?: 'WHATSAPP_BUSINESS_APP_ONBOARDING' | 'STANDARD'
-    preferredPhone?: string
+    connectionId?: number
   }) => api.post('/channel-connections/whatsapp/embedded-signup/complete', data),
+  getWhatsAppCoexistenceStatus: (id: number) =>
+    api.get(`/channel-connections/${id}/whatsapp/coexistence-status`),
+  requestWhatsAppCoexistenceSync: (
+    id: number,
+    data: { syncType: 'CONTACTS' | 'HISTORY'; confirmRetry?: boolean }
+  ) => api.post(`/channel-connections/${id}/whatsapp/coexistence-sync`, data),
   syncWhatsAppTemplates: (id: number, brandId?: number) =>
     api.post(`/channel-connections/${id}/whatsapp/sync-templates`, brandId ? { brand_id: brandId } : {}),
   ensureWhatsAppSender: (id: number, data?: { brand_id?: number }) =>
